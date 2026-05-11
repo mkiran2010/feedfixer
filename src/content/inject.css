@@ -1,0 +1,48 @@
+[data-feedfixer-state="pending"] {
+  opacity: 0.45;
+  filter: grayscale(0.5);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+[data-feedfixer-state="hidden"] {
+  display: none !important;
+}
+
+[data-feedfixer-state="allowed"] {
+  position: relative;
+  opacity: 1;
+  filter: none;
+}
+
+[data-feedfixer-state="allowed"]::after {
+  content: attr(data-feedfixer-score);
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font: 600 11px/1 system-ui, sans-serif;
+  padding: 3px 6px;
+  border-radius: 4px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+#feedfixer-shorts-overlay {
+  position: fixed;
+  bottom: 96px;
+  right: 24px;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font: 500 13px/1.4 system-ui, sans-serif;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+#feedfixer-shorts-overlay.visible {
+  display: block;
+}

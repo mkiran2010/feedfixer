@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FeedFixer</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      body {
+        width: 320px;
+        margin: 0;
+      }
+      .popup { padding: 16px; }
+      h2 { margin: 0 0 4px 0; font-size: 16px; }
+      .slider-label {
+        display: flex;
+        justify-content: space-between;
+        font-weight: 600;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        margin: 16px 0;
+        text-align: center;
+      }
+      .stat { background: rgba(0,0,0,0.05); padding: 8px; border-radius: 6px; }
+      @media (prefers-color-scheme: dark) {
+        .stat { background: rgba(255,255,255,0.06); }
+      }
+      .stat .num { font-size: 18px; font-weight: 700; }
+      .stat .lbl { font-size: 10px; opacity: 0.7; text-transform: uppercase; }
+      .row { display: flex; gap: 6px; margin-top: 8px; }
+      .row > * { flex: 1; }
+      .footer {
+        margin-top: 12px;
+        text-align: center;
+        font-size: 11px;
+      }
+      .footer a { color: inherit; }
+      .pause-banner {
+        background: #fff3cd;
+        color: #664d03;
+        padding: 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="popup"></div>
+    <script type="module" src="./popup.tsx"></script>
+  </body>
+</html>
