@@ -1,4 +1,10 @@
-import type { ScoredReel, SessionLock, Settings } from "./types";
+import type { LocalAIStatus, ScoredReel, SessionLock, Settings } from "./types";
+
+/** Messages from popup → content script (via chrome.tabs.sendMessage) */
+export type TabMsg = { kind: "manual-skip" };
+export type TabReply =
+  | { kind: "skipped"; method: string }
+  | { kind: "skip-failed"; reason: string };
 
 /** Messages from popup / content script → service worker */
 export type Msg =
@@ -8,7 +14,9 @@ export type Msg =
   | { kind: "get-last-verdict" }
   | { kind: "get-last-error" }
   | { kind: "get-lock" }
-  | { kind: "unlock-session" };
+  | { kind: "unlock-session" }
+  | { kind: "check-local-ai" }
+  | { kind: "trigger-local-ai-download" };
 
 export type Reply =
   | {
@@ -21,6 +29,7 @@ export type Reply =
   | { kind: "last-verdict"; result: ScoredReel | null }
   | { kind: "last-error"; error: string | null }
   | { kind: "lock"; lock: SessionLock | null }
+  | { kind: "local-ai-status"; status: LocalAIStatus }
   | { kind: "ok" }
   | { kind: "error"; message: string };
 

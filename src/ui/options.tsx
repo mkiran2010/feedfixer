@@ -5,26 +5,35 @@ import {
   DEFAULT_CUSTOM_INSTRUCTION,
   DEFAULT_RUBRIC,
   DEFAULT_STAGES,
+  type LocalAIStatus,
   type SessionLock,
   type Settings,
 } from "../shared/types";
 
-const MODELS = [
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — fast + cheap (default)" },
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — better nuance, ~3× cost" },
-];
+function aiBadgeText(s: LocalAIStatus | null): string {
+  if (!s) return "Checking…";
+  switch (s.kind) {
+    case "ready": return "Ready — model installed and available.";
+    case "downloadable": return "Available — model needs to download once (~1.7 GB).";
+    case "downloading": return s.progressPct ? `Downloading model (${s.progressPct}%)…` : "Downloading model…";
+    case "unavailable": return `Unavailable — ${s.reason}`;
+  }
+}
 
 function Options() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [lock, setLock] = useState<SessionLock | null>(null);
   const [savedAt, setSavedAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [localAI, setLocalAI] = useState<LocalAIStatus | null>(null);
 
   const refresh = async () => {
     const r = await send({ kind: "get-settings" });
     if (r.kind === "settings") setSettings(r.settings);
     const l = await send({ kind: "get-lock" });
     if (l.kind === "lock") setLock(l.lock);
+    const ai = await send({ kind: "check-local-ai" });
+    if (ai.kind === "local-ai-status") setLocalAI(ai.status);
   };
 
   useEffect(() => { void refresh(); }, []);
@@ -57,15 +66,26 @@ function Options() {
     await refresh();
   };
 
+  const downloadModel = async () => {
+    setLocalAI({ kind: "downloading" });
+    const r = await send({ kind: "trigger-local-ai-download" });
+    if (r.kind === "local-ai-status") setLocalAI(r.status);
+  };
+
   const isLocked = lock !== null;
   const justSaved = Date.now() - savedAt < 2000;
   const useCustom = settings.useCustomInstruction;
+
+  const aiColor =
+    localAI?.kind === "ready" ? "var(--stay)" :
+    localAI?.kind === "unavailable" ? "var(--junk)" :
+    "var(--warning)";
 
   return (
     <>
       <h1>FeedFixer</h1>
       <p className="hint" style={{ fontSize: 14, marginBottom: 24 }}>
-        Configure how aggressively to filter YouTube Shorts.
+        On-device AI filter for YouTube Shorts. No API key, no data leaves your browser.
       </p>
 
       {isLocked && (
@@ -80,32 +100,33 @@ function Options() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="section-title">Anthropic API</div>
-
-      <div className="field">
-        <label htmlFor="apikey">API key</label>
-        <input
-          id="apikey"
-          type="password"
-          placeholder="sk-ant-…"
-          value={settings.apiKey}
-          onChange={(e) => update("apiKey", e.target.value)}
-        />
-        <p className="hint">
-          Stored locally only.{" "}
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
-            Get a key →
-          </a>
+      <div className="section-title">On-device AI</div>
+      <div
+        style={{
+          padding: 14,
+          border: `1px solid ${aiColor}`,
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          marginBottom: 24,
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 6, color: aiColor }}>
+          {aiBadgeText(localAI)}
+        </div>
+        <p className="hint" style={{ marginTop: 0 }}>
+          FeedFixer uses Chrome's built-in <strong>Gemini Nano</strong> model. It runs entirely
+          on your device — no API key, no requests to a server, no spending. Requires Chrome 138+
+          on Windows 10/11, macOS 13+, Linux, or ChromeOS.
         </p>
-      </div>
-
-      <div className="field">
-        <label htmlFor="model">Model</label>
-        <select id="model" value={settings.model} onChange={(e) => update("model", e.target.value)}>
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>{m.label}</option>
-          ))}
-        </select>
+        {localAI?.kind === "downloadable" && (
+          <button
+            className="primary"
+            onClick={() => void downloadModel()}
+            style={{ marginTop: 8 }}
+          >
+            Download model now
+          </button>
+        )}
       </div>
 
       <div className="section-title">Filter mode</div>
@@ -161,8 +182,8 @@ function Options() {
             placeholder='e.g. "Only stay on videos about chess, philosophy, or rocket science. Anything else is junk."'
           />
           <p className="hint">
-            This single rule replaces the 1–10 scale for every classification request. Be specific
-            about what to keep — Claude treats anything not matching as junk.
+            This single rule replaces the 1–10 scale. Be specific about what to keep — Gemini
+            Nano treats anything not matching as junk.
           </p>
           <button
             onClick={() => update("customInstruction", DEFAULT_CUSTOM_INSTRUCTION)}
@@ -176,7 +197,7 @@ function Options() {
         <>
           <p className="hint" style={{ marginBottom: 12 }}>
             Describe what counts as "Junk" at each level. The popup slider picks which level is
-            active. Edit in your own voice — Claude follows them literally.
+            active.
           </p>
           <div style={{ background: "var(--bg-elevated)", borderRadius: 12, padding: "4px 16px", border: "1px solid var(--border-soft)" }}>
             {settings.stages.map((s, i) => (
@@ -203,8 +224,7 @@ function Options() {
 
       <div className="section-title">Base classification rubric</div>
       <p className="hint" style={{ marginBottom: 12 }}>
-        The base prompt sent to Claude. Usually you don't need to edit this — tune the active
-        rule above instead.
+        The base prompt sent to Gemini Nano. Usually you don't need to edit this.
       </p>
       <textarea
         rows={8}
@@ -220,7 +240,7 @@ function Options() {
       <div className="toggle-row">
         <div>
           <label htmlFor="auto-skip-opt">Auto-skip junk</label>
-          <p className="hint">When Claude says "Junk", silently advance the Short.</p>
+          <p className="hint">When the model says "Junk", silently advance the Short.</p>
         </div>
         <input
           id="auto-skip-opt"

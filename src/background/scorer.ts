@@ -1,4 +1,4 @@
-import type { ScoredReel, Settings, VideoMeta } from "../shared/types";
+import type { LocalAIStatus, ScoredReel, Settings, VideoMeta } from "../shared/types";
 
 interface OembedResponse {
   title?: string;
@@ -29,16 +29,6 @@ function parseVerdict(text: string): { verdict: "Junk" | "Stay"; reason: string 
   return { verdict: "Stay", reason: `unparseable: ${trimmed.slice(0, 80)}` };
 }
 
-interface ClaudeContentBlock {
-  type: string;
-  text?: string;
-}
-
-interface ClaudeResponse {
-  content?: ClaudeContentBlock[];
-  error?: { message?: string; type?: string };
-}
-
 function activeFilterDescription(settings: Settings): string {
   if (settings.useCustomInstruction && settings.customInstruction.trim()) {
     return `Custom filter rule: ${settings.customInstruction.trim()}`;
@@ -48,80 +38,127 @@ function activeFilterDescription(settings: Settings): string {
   return `Strictness level ${level}/10 — ${desc}`;
 }
 
+/* ---------- Chrome built-in AI (LanguageModel) bindings ---------- */
+/* The `LanguageModel` global is exposed in service workers and extension pages on
+   Chrome 138+ when the user's machine supports it. */
+
+interface PromptParam {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+interface CreateMonitor {
+  addEventListener(
+    name: "downloadprogress",
+    cb: (e: { loaded: number; total: number }) => void,
+  ): void;
+}
+
+interface LanguageModelSession {
+  prompt(input: string | PromptParam[]): Promise<string>;
+  destroy(): void;
+}
+
+interface LanguageModelStatic {
+  availability(): Promise<"available" | "downloadable" | "downloading" | "unavailable">;
+  create(opts?: {
+    initialPrompts?: PromptParam[];
+    monitor?: (m: CreateMonitor) => void;
+    expectedInputs?: { type: "text" | "image" | "audio" }[];
+    expectedOutputs?: { type: "text"; languages?: string[] }[];
+  }): Promise<LanguageModelSession>;
+}
+
+function getLanguageModel(): LanguageModelStatic | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = globalThis as any;
+  return (g.LanguageModel as LanguageModelStatic | undefined) ?? null;
+}
+
+export async function checkLocalAI(): Promise<LocalAIStatus> {
+  const lm = getLanguageModel();
+  if (!lm) {
+    return {
+      kind: "unavailable",
+      reason:
+        "Chrome built-in AI is not exposed on this browser. Needs Chrome 138+ on Windows 10/11, macOS 13+, Linux, or ChromeOS, and a supported device.",
+    };
+  }
+  try {
+    const status = await lm.availability();
+    switch (status) {
+      case "available":
+        return { kind: "ready" };
+      case "downloadable":
+        return { kind: "downloadable" };
+      case "downloading":
+        return { kind: "downloading" };
+      case "unavailable":
+        return {
+          kind: "unavailable",
+          reason: "Chrome reports the on-device model as unavailable for this device.",
+        };
+    }
+  } catch (err) {
+    return {
+      kind: "unavailable",
+      reason: `availability() failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+let progressPct = 0;
+
+export async function triggerLocalAIDownload(): Promise<LocalAIStatus> {
+  const lm = getLanguageModel();
+  if (!lm) {
+    return { kind: "unavailable", reason: "LanguageModel not available" };
+  }
+  try {
+    const session = await lm.create({
+      monitor: (m) =>
+        m.addEventListener("downloadprogress", (e) => {
+          progressPct = e.total > 0 ? Math.round((e.loaded / e.total) * 100) : 0;
+          console.log(`[feedfixer] model download ${progressPct}%`);
+        }),
+    });
+    session.destroy();
+    return { kind: "ready" };
+  } catch (err) {
+    return {
+      kind: "unavailable",
+      reason: `create() failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+let cachedSession: LanguageModelSession | null = null;
+let cachedSessionRubric = "";
+
+async function getSession(systemPrompt: string): Promise<LanguageModelSession> {
+  if (cachedSession && cachedSessionRubric === systemPrompt) return cachedSession;
+  const lm = getLanguageModel();
+  if (!lm) throw new Error("Chrome built-in AI not available — see popup for details");
+  cachedSession?.destroy();
+  cachedSession = await lm.create({
+    initialPrompts: [{ role: "system", content: systemPrompt }],
+  });
+  cachedSessionRubric = systemPrompt;
+  return cachedSession;
+}
+
 export async function scoreReel(
   meta: VideoMeta,
   settings: Settings,
 ): Promise<ScoredReel> {
-  if (!settings.apiKey) throw new Error("missing API key — set one in FeedFixer options");
-
-  const body = {
-    model: settings.model,
-    max_tokens: 30,
-    system: [
-      {
-        type: "text",
-        text: settings.rubric,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content:
-          `${activeFilterDescription(settings)}\n\n` +
-          `Title: ${meta.title}\n` +
-          `Channel: ${meta.channel}\n\n` +
-          `Reply with EXACTLY one word: "Junk" or "Stay".`,
-      },
-    ],
-  };
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20_000);
-
-  let response: Response;
-  try {
-    response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": settings.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("Claude API timeout (20s)");
-    }
-    throw new Error(`fetch failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  clearTimeout(timeoutId);
-
-  const raw = await response.text();
-  let data: ClaudeResponse;
-  try {
-    data = JSON.parse(raw) as ClaudeResponse;
-  } catch {
-    throw new Error(`non-JSON response (${response.status}): ${raw.slice(0, 200)}`);
-  }
-
-  if (!response.ok) {
-    const apiMsg = data.error?.message ?? raw.slice(0, 200);
-    throw new Error(`Claude API ${response.status}: ${apiMsg}`);
-  }
-
-  const text =
-    (data.content ?? [])
-      .filter((b) => b.type === "text" && typeof b.text === "string")
-      .map((b) => b.text!)
-      .join("") ?? "";
-
-  const { verdict, reason } = parseVerdict(text);
-
+  const session = await getSession(settings.rubric);
+  const userPrompt =
+    `${activeFilterDescription(settings)}\n\n` +
+    `Title: ${meta.title}\n` +
+    `Channel: ${meta.channel}\n\n` +
+    `Reply with EXACTLY one word: "Junk" or "Stay".`;
+  const response = await session.prompt(userPrompt);
+  const { verdict, reason } = parseVerdict(response);
   return {
     videoId: meta.videoId,
     verdict,

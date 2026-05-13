@@ -13,9 +13,14 @@ export interface ScoredReel {
   scoredAt: number;
 }
 
+/** Whether Chrome's built-in AI is usable right now. */
+export type LocalAIStatus =
+  | { kind: "ready" }
+  | { kind: "downloadable" }
+  | { kind: "downloading"; progressPct?: number }
+  | { kind: "unavailable"; reason: string };
+
 export interface Settings {
-  apiKey: string;
-  model: string;
   rubric: string;
   stages: string[];
   currentLevel: number;
@@ -58,8 +63,6 @@ export const DEFAULT_STAGES: string[] = [
 export const DEFAULT_CUSTOM_INSTRUCTION = `Only stay on videos that indicate substantive content about science, mathematics, philosophy, history, or skill-based tutorials. Classify anything else (memes, reactions, comedy, sports clips, general entertainment) as junk.`;
 
 export const DEFAULT_SETTINGS: Settings = {
-  apiKey: "",
-  model: "claude-haiku-4-5",
   rubric: DEFAULT_RUBRIC,
   stages: DEFAULT_STAGES,
   currentLevel: 5,

@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "FeedFixer (metadata)",
-  "version": "0.3.0",
-  "description": "Auto-skip junk YouTube Shorts using Claude metadata classification.",
-  "minimum_chrome_version": "114",
-  "permissions": ["storage", "activeTab"],
+  "name": "FeedFixer (local)",
+  "version": "0.4.0",
+  "description": "Auto-skip junk YouTube Shorts using Chrome's on-device AI. No API key, no data leaves your browser.",
+  "minimum_chrome_version": "138",
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://m.youtube.com/*",
-    "https://api.anthropic.com/*"
+    "https://m.youtube.com/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.ts",

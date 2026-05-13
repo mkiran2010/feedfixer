@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "../shared/messages";
-import type { ScoredReel, SessionLock, Settings } from "../shared/types";
+import type { TabMsg, TabReply } from "../shared/messages";
+import type { LocalAIStatus, ScoredReel, SessionLock, Settings } from "../shared/types";
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -18,6 +19,26 @@ function isYouTubeUrl(url: string | undefined): boolean {
   return /^https:\/\/(www\.|m\.)?youtube\.com\//.test(url);
 }
 
+async function manualSkip(
+  tabId: number,
+): Promise<TabReply | { kind: "send-failed"; reason: string }> {
+  return new Promise((resolve) => {
+    const msg: TabMsg = { kind: "manual-skip" };
+    chrome.tabs.sendMessage(tabId, msg, (reply: TabReply | undefined) => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        resolve({ kind: "send-failed", reason: err.message ?? "unknown" });
+        return;
+      }
+      if (!reply) {
+        resolve({ kind: "send-failed", reason: "content script returned nothing" });
+        return;
+      }
+      resolve(reply);
+    });
+  });
+}
+
 function fmtAge(ts: number): string {
   const sec = Math.round((Date.now() - ts) / 1000);
   if (sec < 60) return `${sec}s ago`;
@@ -26,12 +47,28 @@ function fmtAge(ts: number): string {
   return `${Math.floor(min / 60)}h ago`;
 }
 
+function localAIBadge(status: LocalAIStatus | null) {
+  if (!status) return { text: "checking…", color: "var(--text-muted)" };
+  switch (status.kind) {
+    case "ready":
+      return { text: "on-device AI ready", color: "var(--stay)" };
+    case "downloadable":
+      return { text: "model not yet downloaded", color: "var(--warning)" };
+    case "downloading":
+      return { text: `downloading model${status.progressPct ? ` (${status.progressPct}%)` : "…"}`, color: "var(--warning)" };
+    case "unavailable":
+      return { text: "on-device AI unavailable", color: "var(--junk)" };
+  }
+}
+
 function Popup() {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
+  const [skipStatus, setSkipStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [verdict, setVerdict] = useState<ScoredReel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lock, setLock] = useState<SessionLock | null>(null);
+  const [localAI, setLocalAI] = useState<LocalAIStatus | null>(null);
 
   const refresh = async () => {
     try {
@@ -44,6 +81,8 @@ function Popup() {
       if (e.kind === "last-error") setError(e.error);
       const l = await send({ kind: "get-lock" });
       if (l.kind === "lock") setLock(l.lock);
+      const ai = await send({ kind: "check-local-ai" });
+      if (ai.kind === "local-ai-status") setLocalAI(ai.status);
     } catch {
       // SW idle — silently retry
     }
@@ -51,7 +90,7 @@ function Popup() {
 
   useEffect(() => {
     void refresh();
-    const id = setInterval(refresh, 1000);
+    const id = setInterval(refresh, 1500);
     return () => clearInterval(id);
   }, []);
 
@@ -59,9 +98,19 @@ function Popup() {
 
   const onShorts = isShortsUrl(tab?.url);
   const onYouTube = isYouTubeUrl(tab?.url);
-  const apiKeyMissing = !settings.apiKey;
   const isLocked = lock !== null;
   const usingCustom = settings.useCustomInstruction;
+  const aiBadge = localAIBadge(localAI);
+
+  const onSkip = async () => {
+    if (!tab?.id) return;
+    setSkipStatus("…");
+    const reply = await manualSkip(tab.id);
+    if (reply.kind === "skipped") setSkipStatus(`Skipped (${reply.method})`);
+    else if (reply.kind === "skip-failed") setSkipStatus(`Failed: ${reply.reason}`);
+    else setSkipStatus(`No response: ${reply.reason}`);
+    setTimeout(() => setSkipStatus(null), 2000);
+  };
 
   const setLevel = async (level: number) => {
     if (isLocked) return;
@@ -83,31 +132,58 @@ function Popup() {
     await refresh();
   };
 
+  const downloadModel = async () => {
+    setLocalAI({ kind: "downloading" });
+    const r = await send({ kind: "trigger-local-ai-download" });
+    if (r.kind === "local-ai-status") setLocalAI(r.status);
+  };
+
   const stageDesc = settings.stages[settings.currentLevel - 1] ?? "";
 
   return (
     <>
       <div className="header">
-        <span className="dot" />
+        <span className="dot" style={{ background: aiBadge.color, boxShadow: `0 0 8px ${aiBadge.color}` }} />
         <h2>FeedFixer</h2>
       </div>
-      <p className="hint" style={{ marginTop: 0, marginBottom: 14 }}>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 6 }}>
         {onYouTube ? (onShorts ? "On Shorts" : "On YouTube — open a Short") : "Not on YouTube"}
       </p>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 14, color: aiBadge.color, fontWeight: 600 }}>
+        {aiBadge.text}
+      </p>
 
-      {apiKeyMissing && (
-        <div className="error-banner">
-          No API key.{" "}
-          <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
-            Open settings →
-          </a>
+      {localAI?.kind === "downloadable" && (
+        <div className="lock-banner" style={{ marginBottom: 12 }}>
+          <span>Gemini Nano needs to download once (~1.7GB).</span>
+          <button onClick={() => void downloadModel()}>Download</button>
         </div>
       )}
 
-      {error && !apiKeyMissing && (
+      {localAI?.kind === "unavailable" && (
+        <div className="error-banner">
+          <strong>Local AI unavailable:</strong> {localAI.reason}
+        </div>
+      )}
+
+      {error && (
         <div className="error-banner">
           <strong>Last error:</strong> {error}
         </div>
+      )}
+
+      <button
+        className="primary"
+        style={{ width: "100%", padding: "12px", fontSize: 14 }}
+        disabled={!onShorts}
+        onClick={() => void onSkip()}
+      >
+        ⬇ Skip current Short
+      </button>
+      {skipStatus && (
+        <p className="hint" style={{ margin: "6px 0 0", textAlign: "center" }}>
+          {skipStatus}
+        </p>
       )}
 
       {usingCustom ? (
@@ -187,7 +263,7 @@ function Popup() {
 
       <p style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
         <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
-          Edit rules & API key →
+          Edit rules →
         </a>
       </p>
     </>

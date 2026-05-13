@@ -24,8 +24,9 @@ GitHub: <https://github.com/mkiran2010/feedfixer> (private)
 | `main` | Minimal working baseline. Just a manual "Skip Short" button in the popup, no API. Has v0.1.0-tagged scaffold attempt + cleanup commits. Two commits total since the strip. |
 | `metadata-analysis` | The real product. YouTube auto-skip via Claude metadata classification, 1–10 strictness slider OR custom instruction mode, session lock, auto-advance on reel end, purple/black themed UI with Outfit font. **This is the working branch.** |
 | `multi-site` | Branched off `metadata-analysis` head (`bccda77`). Currently identical. Where the next work happens — adapting the extraction + skip pipeline to TikTok web, Instagram Reels web, and X video. After this, the same per-platform structure becomes the substrate for a local-model variant (CLIP/Transformers.js). |
+| `locality` | Branched off `multi-site`. **No Anthropic API.** Uses Chrome's built-in Prompt API (`LanguageModel` global, Gemini Nano, Chrome 138+). The API key field is gone, the model selector is gone, scoring is fully on-device and free. Manual skip button is back. Intended as the **first beta** for Chrome Web Store submission — see `PUBLISHING.md`. |
 
-**The user is currently checked out on `multi-site`** — confirm with `git status` before assuming.
+**Confirm current branch with `git status` before assuming.**
 
 ---
 
@@ -194,13 +195,7 @@ Captured in `research/lookahead.md` and in the conversation history:
 - **Local model variant**: replace the Claude API call with a local Transformers.js + CLIP inference on a captured video frame. Pros: zero per-call cost, zero data leaves the browser. Cons: 80–150MB one-time model download, ~500ms per inference, classification accuracy is rougher. The multi-site adapter pattern is what makes this swap clean — just swap the scorer module.
 
 ### Long-term
-- **Chrome Web Store publication.** Currently NOT published. To use the extension someone has to clone the repo, build, and load unpacked themselves. Publishing requires:
-  - $5 one-time developer registration on <https://chrome.google.com/webstore/devconsole>
-  - Privacy policy URL
-  - Screenshots, description, icon (the extension currently has no icon)
-  - Single-purpose declaration
-  - ~3–7 day review
-  - User has been told this; defer until product is more polished.
+- **Chrome Web Store publication.** See `PUBLISHING.md` (on `locality` branch) for the full playbook. The `locality` branch is the intended submission candidate because it has no API key (cleaner permission story, easier review). Pre-flight blockers: icons, privacy policy URL, screenshots, detailed description.
 - **Cost dashboard in the popup** — surface input/output tokens, estimated $/day, cache hit rate. Useful once usage scales.
 - **Watch-time analytics** — show "you saved X minutes this week" to make the value tangible.
 

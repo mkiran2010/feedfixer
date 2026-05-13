@@ -1,7 +1,7 @@
 import type { Msg, Reply } from "../shared/messages";
 import type { ScoredReel, SessionLock } from "../shared/types";
 import { loadSettings, saveSettings } from "../shared/settings";
-import { fetchMeta, scoreReel } from "./scorer";
+import { checkLocalAI, fetchMeta, scoreReel, triggerLocalAIDownload } from "./scorer";
 
 const LAST_VERDICT_KEY = "feedfixer.lastVerdict";
 const LAST_ERROR_KEY = "feedfixer.lastError";
@@ -125,7 +125,11 @@ async function handle(msg: Msg): Promise<Reply> {
     case "unlock-session":
       await unlockSession();
       return { kind: "ok" };
+    case "check-local-ai":
+      return { kind: "local-ai-status", status: await checkLocalAI() };
+    case "trigger-local-ai-download":
+      return { kind: "local-ai-status", status: await triggerLocalAIDownload() };
   }
 }
 
-console.log("[feedfixer] service worker ready");
+console.log("[feedfixer] service worker ready (locality / local AI mode)");
