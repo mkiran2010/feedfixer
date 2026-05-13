@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "../shared/messages";
-import type { TabMsg, TabReply } from "../shared/messages";
 import type { ScoredReel, SessionLock, Settings } from "../shared/types";
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -19,26 +18,6 @@ function isYouTubeUrl(url: string | undefined): boolean {
   return /^https:\/\/(www\.|m\.)?youtube\.com\//.test(url);
 }
 
-async function manualSkip(
-  tabId: number,
-): Promise<TabReply | { kind: "send-failed"; reason: string }> {
-  return new Promise((resolve) => {
-    const msg: TabMsg = { kind: "manual-skip" };
-    chrome.tabs.sendMessage(tabId, msg, (reply: TabReply | undefined) => {
-      const err = chrome.runtime.lastError;
-      if (err) {
-        resolve({ kind: "send-failed", reason: err.message ?? "unknown" });
-        return;
-      }
-      if (!reply) {
-        resolve({ kind: "send-failed", reason: "content script returned nothing" });
-        return;
-      }
-      resolve(reply);
-    });
-  });
-}
-
 function fmtAge(ts: number): string {
   const sec = Math.round((Date.now() - ts) / 1000);
   if (sec < 60) return `${sec}s ago`;
@@ -49,7 +28,6 @@ function fmtAge(ts: number): string {
 
 function Popup() {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
-  const [skipStatus, setSkipStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [verdict, setVerdict] = useState<ScoredReel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +45,7 @@ function Popup() {
       const l = await send({ kind: "get-lock" });
       if (l.kind === "lock") setLock(l.lock);
     } catch {
-      // SW idle / restart — silently retry on next tick
+      // SW idle — silently retry
     }
   };
 
@@ -83,16 +61,7 @@ function Popup() {
   const onYouTube = isYouTubeUrl(tab?.url);
   const apiKeyMissing = !settings.apiKey;
   const isLocked = lock !== null;
-
-  const onSkip = async () => {
-    if (!tab?.id) return;
-    setSkipStatus("…");
-    const reply = await manualSkip(tab.id);
-    if (reply.kind === "skipped") setSkipStatus(`Skipped (${reply.method})`);
-    else if (reply.kind === "skip-failed") setSkipStatus(`Failed: ${reply.reason}`);
-    else setSkipStatus(`No response: ${reply.reason}`);
-    setTimeout(() => setSkipStatus(null), 2000);
-  };
+  const usingCustom = settings.useCustomInstruction;
 
   const setLevel = async (level: number) => {
     if (isLocked) return;
@@ -141,43 +110,56 @@ function Popup() {
         </div>
       )}
 
-      <button
-        className="primary"
-        style={{ width: "100%", padding: "12px", fontSize: 14 }}
-        disabled={!onShorts}
-        onClick={() => void onSkip()}
-      >
-        ⬇ Skip current Short
-      </button>
-      {skipStatus && (
-        <p className="hint" style={{ margin: "6px 0 0", textAlign: "center" }}>
-          {skipStatus}
-        </p>
+      {usingCustom ? (
+        <>
+          <div className="section-title">Custom rule</div>
+          <div
+            style={{
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-soft)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: "var(--text-muted)",
+              minHeight: 50,
+            }}
+          >
+            {settings.customInstruction || "(empty — set one in options)"}
+          </div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Edit in <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>options</a>.
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="section-title">Strictness</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>Level {settings.currentLevel} / 10</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              {settings.currentLevel <= 3 ? "lenient" : settings.currentLevel <= 6 ? "moderate" : settings.currentLevel <= 8 ? "strict" : "extreme"}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            step={1}
+            value={settings.currentLevel}
+            disabled={isLocked}
+            onChange={(e) => void setLevel(Number(e.target.value))}
+          />
+          <p className="hint" style={{ marginTop: 8, lineHeight: 1.4 }}>
+            {stageDesc}
+          </p>
+        </>
       )}
-
-      <div className="section-title">Strictness</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <span style={{ fontWeight: 700, fontSize: 13 }}>Level {settings.currentLevel} / 10</span>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {settings.currentLevel <= 3 ? "lenient" : settings.currentLevel <= 6 ? "moderate" : settings.currentLevel <= 8 ? "strict" : "extreme"}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={1}
-        max={10}
-        step={1}
-        value={settings.currentLevel}
-        disabled={isLocked}
-        onChange={(e) => void setLevel(Number(e.target.value))}
-      />
-      <p className="hint" style={{ marginTop: 8, lineHeight: 1.4 }}>
-        {stageDesc}
-      </p>
 
       {isLocked && (
         <div className="lock-banner">
-          <span>Locked at level {lock.lockedAtLevel} ({fmtAge(lock.lockedAt)})</span>
+          <span>
+            Locked {usingCustom ? "(custom rule)" : `at level ${lock.lockedAtLevel}`} ({fmtAge(lock.lockedAt)})
+          </span>
           <button onClick={() => void unlock()}>Unlock</button>
         </div>
       )}
@@ -205,7 +187,7 @@ function Popup() {
 
       <p style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
         <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
-          Edit stages, rubric & API key →
+          Edit rules & API key →
         </a>
       </p>
     </>

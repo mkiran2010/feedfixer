@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "../shared/messages";
-import { DEFAULT_RUBRIC, DEFAULT_STAGES, type SessionLock, type Settings } from "../shared/types";
+import {
+  DEFAULT_CUSTOM_INSTRUCTION,
+  DEFAULT_RUBRIC,
+  DEFAULT_STAGES,
+  type SessionLock,
+  type Settings,
+} from "../shared/types";
 
 const MODELS = [
   { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — fast + cheap (default)" },
@@ -46,9 +52,6 @@ function Options() {
     }
   };
 
-  const resetStages = () => update("stages", DEFAULT_STAGES);
-  const resetRubric = () => update("rubric", DEFAULT_RUBRIC);
-
   const unlock = async () => {
     await send({ kind: "unlock-session" });
     await refresh();
@@ -56,6 +59,7 @@ function Options() {
 
   const isLocked = lock !== null;
   const justSaved = Date.now() - savedAt < 2000;
+  const useCustom = settings.useCustomInstruction;
 
   return (
     <>
@@ -67,8 +71,8 @@ function Options() {
       {isLocked && (
         <div className="lock-banner" style={{ marginBottom: 24 }}>
           <span>
-            Session is locked at level {lock.lockedAtLevel}. Stage descriptions and current
-            level can't be changed until you unlock.
+            Session locked. Filter rule, stages, and the custom instruction are read-only
+            until you unlock.
           </span>
           <button onClick={() => void unlock()}>Unlock</button>
         </div>
@@ -88,11 +92,10 @@ function Options() {
           onChange={(e) => update("apiKey", e.target.value)}
         />
         <p className="hint">
-          Stored locally only. Get one at{" "}
+          Stored locally only.{" "}
           <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
-            console.anthropic.com
+            Get a key →
           </a>
-          .
         </p>
       </div>
 
@@ -105,40 +108,112 @@ function Options() {
         </select>
       </div>
 
-      <div className="section-title">Strictness stages (1 = lenient, 10 = strict)</div>
-      <p className="hint" style={{ marginBottom: 12 }}>
-        Describe what counts as "Junk" at each level. The popup slider picks which level is
-        active. Edit these in your own voice — Claude follows them literally.
-      </p>
+      <div className="section-title">Filter mode</div>
 
-      <div style={{ background: "var(--bg-elevated)", borderRadius: 12, padding: "4px 16px", border: "1px solid var(--border-soft)" }}>
-        {settings.stages.map((s, i) => (
-          <div key={i} className="stage-row">
-            <div className="stage-num">{i + 1}</div>
-            <textarea
-              rows={2}
-              value={s}
-              disabled={isLocked}
-              onChange={(e) => updateStage(i, e.target.value)}
-            />
-          </div>
-        ))}
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          background: "var(--bg-elevated)",
+          padding: 6,
+          borderRadius: 12,
+          border: "1px solid var(--border-soft)",
+          marginBottom: 16,
+        }}
+      >
+        <button
+          onClick={() => update("useCustomInstruction", false)}
+          disabled={isLocked}
+          style={{
+            flex: 1,
+            background: !useCustom ? "var(--primary-strong)" : "transparent",
+            color: !useCustom ? "#fff" : "var(--text)",
+            border: "none",
+            fontWeight: 700,
+          }}
+        >
+          1–10 strictness scale
+        </button>
+        <button
+          onClick={() => update("useCustomInstruction", true)}
+          disabled={isLocked}
+          style={{
+            flex: 1,
+            background: useCustom ? "var(--primary-strong)" : "transparent",
+            color: useCustom ? "#fff" : "var(--text)",
+            border: "none",
+            fontWeight: 700,
+          }}
+        >
+          Custom instruction
+        </button>
       </div>
-      <button onClick={resetStages} disabled={isLocked} style={{ marginTop: 10 }}>
-        Reset all stages to defaults
-      </button>
+
+      {useCustom ? (
+        <div className="field">
+          <label htmlFor="custom">Custom filter rule</label>
+          <textarea
+            id="custom"
+            rows={5}
+            value={settings.customInstruction}
+            disabled={isLocked}
+            onChange={(e) => update("customInstruction", e.target.value)}
+            placeholder='e.g. "Only stay on videos about chess, philosophy, or rocket science. Anything else is junk."'
+          />
+          <p className="hint">
+            This single rule replaces the 1–10 scale for every classification request. Be specific
+            about what to keep — Claude treats anything not matching as junk.
+          </p>
+          <button
+            onClick={() => update("customInstruction", DEFAULT_CUSTOM_INSTRUCTION)}
+            disabled={isLocked}
+            style={{ marginTop: 8 }}
+          >
+            Use example rule
+          </button>
+        </div>
+      ) : (
+        <>
+          <p className="hint" style={{ marginBottom: 12 }}>
+            Describe what counts as "Junk" at each level. The popup slider picks which level is
+            active. Edit in your own voice — Claude follows them literally.
+          </p>
+          <div style={{ background: "var(--bg-elevated)", borderRadius: 12, padding: "4px 16px", border: "1px solid var(--border-soft)" }}>
+            {settings.stages.map((s, i) => (
+              <div key={i} className="stage-row">
+                <div className="stage-num">{i + 1}</div>
+                <textarea
+                  rows={2}
+                  value={s}
+                  disabled={isLocked}
+                  onChange={(e) => updateStage(i, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => update("stages", DEFAULT_STAGES)}
+            disabled={isLocked}
+            style={{ marginTop: 10 }}
+          >
+            Reset all stages to defaults
+          </button>
+        </>
+      )}
 
       <div className="section-title">Base classification rubric</div>
       <p className="hint" style={{ marginBottom: 12 }}>
-        The base prompt sent to Claude. Usually you don't need to edit this — tune the stages
-        instead. The active stage description is appended to every request.
+        The base prompt sent to Claude. Usually you don't need to edit this — tune the active
+        rule above instead.
       </p>
       <textarea
-        rows={10}
+        rows={8}
         value={settings.rubric}
         onChange={(e) => update("rubric", e.target.value)}
       />
-      <button onClick={resetRubric} style={{ marginTop: 10 }}>Reset rubric to default</button>
+      <button onClick={() => update("rubric", DEFAULT_RUBRIC)} style={{ marginTop: 10 }}>
+        Reset rubric to default
+      </button>
 
       <div className="section-title">Behavior</div>
 

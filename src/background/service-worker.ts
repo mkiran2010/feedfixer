@@ -34,10 +34,17 @@ async function readLock(): Promise<SessionLock | null> {
   return (got[LOCK_KEY] as SessionLock | undefined) ?? null;
 }
 
-async function ensureLocked(currentLevel: number): Promise<void> {
+async function ensureLocked(
+  currentLevel: number,
+  customInstructionAtLock: string | null,
+): Promise<void> {
   const existing = await readLock();
   if (existing) return;
-  const lock: SessionLock = { lockedAt: Date.now(), lockedAtLevel: currentLevel };
+  const lock: SessionLock = {
+    lockedAt: Date.now(),
+    lockedAtLevel: currentLevel,
+    customInstructionAtLock,
+  };
   await chrome.storage.session.set({ [LOCK_KEY]: lock });
 }
 
@@ -51,7 +58,10 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
   console.log(`[feedfixer] scoring ${videoId}: "${meta.title}" / ${meta.channel} @ level ${settings.currentLevel}`);
   const result = await scoreReel(meta, settings);
   await recordVerdict(result);
-  await ensureLocked(settings.currentLevel);
+  await ensureLocked(
+    settings.currentLevel,
+    settings.useCustomInstruction ? settings.customInstruction : null,
+  );
   await clearError();
   console.log(`[feedfixer] verdict ${videoId}: ${result.verdict}`);
   return result;
@@ -77,15 +87,24 @@ async function handle(msg: Msg): Promise<Reply> {
     case "score-reel": {
       const result = await handleScoreReel(msg.videoId);
       const settings = await loadSettings();
-      return { kind: "verdict", result, autoSkipEnabled: settings.autoSkipEnabled };
+      return {
+        kind: "verdict",
+        result,
+        autoSkipEnabled: settings.autoSkipEnabled,
+        autoAdvanceOnEnd: settings.autoAdvanceOnEnd,
+      };
     }
     case "get-settings":
       return { kind: "settings", settings: await loadSettings() };
     case "set-settings": {
-      // Block changes to currentLevel / stages while locked
       const lock = await readLock();
       if (lock) {
-        const blocked: (keyof typeof msg.settings)[] = ["currentLevel", "stages"];
+        const blocked: (keyof typeof msg.settings)[] = [
+          "currentLevel",
+          "stages",
+          "useCustomInstruction",
+          "customInstruction",
+        ];
         for (const k of blocked) {
           if (k in msg.settings) {
             return {

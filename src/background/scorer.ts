@@ -39,7 +39,10 @@ interface ClaudeResponse {
   error?: { message?: string; type?: string };
 }
 
-function levelDescription(settings: Settings): string {
+function activeFilterDescription(settings: Settings): string {
+  if (settings.useCustomInstruction && settings.customInstruction.trim()) {
+    return `Custom filter rule: ${settings.customInstruction.trim()}`;
+  }
   const level = Math.min(10, Math.max(1, settings.currentLevel));
   const desc = settings.stages[level - 1] ?? "";
   return `Strictness level ${level}/10 — ${desc}`;
@@ -65,7 +68,7 @@ export async function scoreReel(
       {
         role: "user",
         content:
-          `${levelDescription(settings)}\n\n` +
+          `${activeFilterDescription(settings)}\n\n` +
           `Title: ${meta.title}\n` +
           `Channel: ${meta.channel}\n\n` +
           `Reply with EXACTLY one word: "Junk" or "Stay".`,

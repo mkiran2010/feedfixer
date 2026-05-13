@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "description": "Auto-skip junk YouTube Shorts using Claude metadata classification.",
   "minimum_chrome_version": "114",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",

@@ -1,9 +1,6 @@
 import { send } from "../shared/messages";
 
-/**
- * Try every known way to advance the YouTube Shorts feed by one.
- * Returns the method that succeeded, or null if all failed.
- */
+/** Try every known way to advance the YouTube Shorts feed by one. */
 export function skipCurrentShort(): string | null {
   const navButton = document.querySelector<HTMLElement>(
     "#navigation-button-down button, " +
@@ -25,8 +22,7 @@ export function skipCurrentShort(): string | null {
     cancelable: true,
     composed: true,
   });
-  const accepted = target.dispatchEvent(ev);
-  if (accepted) {
+  if (target.dispatchEvent(ev)) {
     document.dispatchEvent(ev);
     return "keydown";
   }
@@ -48,60 +44,69 @@ function currentShortIdFromUrl(): string | null {
   return m ? m[1] : null;
 }
 
+function findActiveVideo(): HTMLVideoElement | null {
+  // Prefer the marked-active reel; fall back to whichever <video> is currently playing
+  const inActive = document.querySelector<HTMLVideoElement>(
+    "ytd-reel-video-renderer[is-active] video",
+  );
+  if (inActive) return inActive;
+  const allVideos = Array.from(document.querySelectorAll<HTMLVideoElement>("video"));
+  return allVideos.find((v) => !v.paused && v.currentTime > 0) ?? null;
+}
+
 const scoredIds = new Set<string>();
 let lastTriggeredId: string | null = null;
 let triggerTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Auto-advance-on-end state — one listener at a time
-let endWatchVideo: HTMLVideoElement | null = null;
-let endWatchHandler: (() => void) | null = null;
-let endWatchVideoId: string | null = null;
-let lastTimeForLoopDetect = 0;
+// Auto-advance: poll-based watcher, attaches immediately on reel change, regardless of verdict
+let watcherVideoId: string | null = null;
+let watcherInterval: ReturnType<typeof setInterval> | null = null;
+let watcherLastTime = 0;
+let watcherFireCount = 0;
 
-function detachEndWatcher(): void {
-  if (endWatchVideo && endWatchHandler) {
-    endWatchVideo.removeEventListener("timeupdate", endWatchHandler);
-  }
-  endWatchVideo = null;
-  endWatchHandler = null;
-  endWatchVideoId = null;
-  lastTimeForLoopDetect = 0;
+function detachWatcher(): void {
+  if (watcherInterval) clearInterval(watcherInterval);
+  watcherInterval = null;
+  watcherVideoId = null;
+  watcherLastTime = 0;
+  watcherFireCount = 0;
 }
 
-function attachEndWatcher(videoId: string): void {
-  detachEndWatcher();
-  const video = document.querySelector<HTMLVideoElement>(
-    "ytd-reel-video-renderer[is-active] video",
-  );
-  if (!video) {
-    console.log(`[feedfixer] no active <video> to watch for ${videoId}`);
-    return;
-  }
-  endWatchVideo = video;
-  endWatchVideoId = videoId;
-  lastTimeForLoopDetect = video.currentTime;
+function attachWatcher(videoId: string): void {
+  detachWatcher();
+  watcherVideoId = videoId;
+  watcherFireCount = 0;
+  console.log(`[feedfixer] attaching end-watcher for ${videoId}`);
 
-  endWatchHandler = () => {
-    if (!endWatchVideo || endWatchVideoId !== videoId) return;
+  watcherInterval = setInterval(() => {
+    if (watcherVideoId !== videoId) return;
     if (currentShortIdFromUrl() !== videoId) {
-      detachEndWatcher();
+      console.log(`[feedfixer] reel changed away from ${videoId}, detaching watcher`);
+      detachWatcher();
       return;
     }
-    const t = endWatchVideo.currentTime;
-    const dur = endWatchVideo.duration;
-    const looped = t < lastTimeForLoopDetect - 1; // currentTime jumped backward
-    const nearEnd = isFinite(dur) && dur > 0 && dur - t < 0.25;
-    lastTimeForLoopDetect = t;
-    if (looped || nearEnd) {
-      console.log(`[feedfixer] reel ${videoId} ended (looped=${looped} nearEnd=${nearEnd}) — advancing`);
+    const video = findActiveVideo();
+    if (!video) return;
+    const t = video.currentTime;
+    const dur = video.duration;
+    if (!isFinite(dur) || dur <= 0) return;
+
+    const looped = t < watcherLastTime - 1; // currentTime jumped backward by >1s
+    const nearEnd = dur - t < 0.3;
+
+    if (watcherFireCount === 0 && (looped || nearEnd)) {
+      watcherFireCount++;
+      console.log(
+        `[feedfixer] reel ${videoId} ended (t=${t.toFixed(2)} dur=${dur.toFixed(2)} looped=${looped} nearEnd=${nearEnd}) — auto-advancing`,
+      );
       const method = skipCurrentShort();
       console.log(`[feedfixer] auto-advance via ${method}`);
-      detachEndWatcher();
+      detachWatcher();
+      return;
     }
-  };
 
-  video.addEventListener("timeupdate", endWatchHandler);
-  console.log(`[feedfixer] end-watcher attached to ${videoId}`);
+    watcherLastTime = t;
+  }, 200);
 }
 
 async function triggerScore(videoId: string): Promise<void> {
@@ -121,39 +126,36 @@ async function triggerScore(videoId: string): Promise<void> {
   }
   const { verdict } = reply.result;
   console.log(`[feedfixer] ${videoId} → ${verdict}`);
+
   if (
     verdict === "Junk" &&
     reply.autoSkipEnabled &&
     currentShortIdFromUrl() === videoId
   ) {
     const method = skipCurrentShort();
-    console.log(`[feedfixer] auto-skipped ${videoId} via ${method}`);
+    console.log(`[feedfixer] auto-skipped junk ${videoId} via ${method}`);
+    detachWatcher(); // skip will trigger reel change which detaches anyway
     return;
   }
 
-  // Stay verdict — set up auto-advance-on-end if the user enabled it
-  let settings;
-  try {
-    const r = await send({ kind: "get-settings" });
-    settings = r.kind === "settings" ? r.settings : null;
-  } catch {
-    settings = null;
-  }
-  if (settings?.autoAdvanceOnEnd && currentShortIdFromUrl() === videoId) {
-    // Defer slightly so the active <video> for this reel is in DOM
-    setTimeout(() => attachEndWatcher(videoId), 250);
+  if (!reply.autoAdvanceOnEnd) {
+    console.log(`[feedfixer] auto-advance disabled, detaching watcher`);
+    detachWatcher();
   }
 }
 
 function checkForNewActiveReel(): void {
   const id = currentShortIdFromUrl();
   if (!id) {
-    detachEndWatcher();
+    detachWatcher();
     return;
   }
   if (id === lastTriggeredId) return;
   lastTriggeredId = id;
-  detachEndWatcher();
+
+  // Attach the end-watcher IMMEDIATELY, don't wait for verdict.
+  // It will be detached if score returns Junk (URL changes after skip) or if user navigates away.
+  attachWatcher(id);
 
   if (triggerTimer) clearTimeout(triggerTimer);
   triggerTimer = setTimeout(() => {
