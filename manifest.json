@@ -1,19 +1,14 @@
 {
   "manifest_version": 3,
   "name": "FeedFixer",
-  "version": "0.1.0",
-  "description": "Filter YouTube feeds with an LLM enrichment classifier and a junk-quota slider.",
+  "version": "0.2.0",
+  "description": "Manual skip button for YouTube Shorts.",
   "minimum_chrome_version": "114",
-  "permissions": ["storage", "alarms", "activeTab"],
+  "permissions": ["activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://m.youtube.com/*",
-    "https://api.anthropic.com/*"
+    "https://m.youtube.com/*"
   ],
-  "background": {
-    "service_worker": "src/background/service-worker.ts",
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
@@ -25,15 +20,5 @@
   "action": {
     "default_popup": "src/ui/popup.html",
     "default_title": "FeedFixer"
-  },
-  "options_ui": {
-    "page": "src/ui/options.html",
-    "open_in_tab": true
-  },
-  "web_accessible_resources": [
-    {
-      "resources": ["src/content/inject.css"],
-      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"]
-    }
-  ]
+  }
 }

@@ -1,16 +1,15 @@
 {
   "name": "feedfixer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Filter YouTube feeds with an LLM-scored enrichment classifier and a junk-quota slider.",
+  "description": "Manual skip button for YouTube Shorts.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.40.0",
     "feedfixer": "file:",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
