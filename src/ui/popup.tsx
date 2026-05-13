@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { VerdictLogEntry } from "../shared/messages";
 import { sendAs } from "../shared/typed-send";
-import type { LocalAIStatus, ScoredReel, SessionLock, Settings } from "../shared/types";
+import type { LocalAIStatus, SessionLock, Settings } from "../shared/types";
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -43,21 +44,19 @@ function localAIBadge(status: LocalAIStatus | null) {
 function Popup() {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [verdict, setVerdict] = useState<ScoredReel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lock, setLock] = useState<SessionLock | null>(null);
   const [localAI, setLocalAI] = useState<LocalAIStatus | null>(null);
-  const [logCount, setLogCount] = useState(0);
+  const [logEntries, setLogEntries] = useState<VerdictLogEntry[]>([]);
 
   const refresh = async () => {
     try {
       setTab(await getActiveTab());
       setSettings((await sendAs({ kind: "get-settings" }, "settings")).settings);
-      setVerdict((await sendAs({ kind: "get-last-verdict" }, "last-verdict")).result);
       setError((await sendAs({ kind: "get-last-error" }, "last-error")).error);
       setLock((await sendAs({ kind: "get-lock" }, "lock")).lock);
       setLocalAI((await sendAs({ kind: "check-local-ai" }, "local-ai-status")).status);
-      setLogCount((await sendAs({ kind: "get-verdict-log" }, "verdict-log")).entries.length);
+      setLogEntries((await sendAs({ kind: "get-verdict-log" }, "verdict-log")).entries);
     } catch {
       // SW idle — silently retry
     }
@@ -202,19 +201,27 @@ function Popup() {
         />
       </div>
 
-      {verdict && (
-        <div className={`verdict-card ${verdict.verdict.toLowerCase()}`}>
-          <div className="verdict-label">Last reel: {verdict.verdict}</div>
-          <div style={{ opacity: 0.85, fontSize: 11, fontFamily: "ui-monospace, Menlo, monospace" }}>
-            {verdict.videoId}
-          </div>
-        </div>
+      <div className="section-title">
+        Recent reels{logEntries.length > 0 ? ` (${logEntries.length} total)` : ""}
+      </div>
+      {logEntries.length === 0 ? (
+        <p className="hint">No reels classified yet. Open a YouTube Short.</p>
+      ) : (
+        <ul className="reel-list">
+          {logEntries
+            .slice()
+            .reverse()
+            .slice(0, 8)
+            .map((e) => (
+              <li key={`${e.videoId}-${e.scoredAt}`} className={`reel-row ${e.verdict.toLowerCase()}`}>
+                <span className="reel-verdict">{e.verdict}</span>
+                <span className="reel-title" title={e.title}>{e.title}</span>
+              </li>
+            ))}
+        </ul>
       )}
 
-      <p className="hint" style={{ marginTop: 12, marginBottom: 0, textAlign: "center" }}>
-        {logCount} reel{logCount === 1 ? "" : "s"} classified this install
-      </p>
-      <p style={{ marginTop: 8, marginBottom: 0, textAlign: "center" }}>
+      <p style={{ marginTop: 12, marginBottom: 0, textAlign: "center" }}>
         <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
           Edit rules →
         </a>
