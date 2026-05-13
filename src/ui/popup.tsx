@@ -1,7 +1,41 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "../shared/messages";
+import type { TabMsg, TabReply } from "../shared/messages";
 import type { SessionStats, Settings } from "../shared/types";
+
+async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs[0] ?? null;
+}
+
+function isShortsUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return /^https:\/\/(www\.|m\.)?youtube\.com\/shorts\//.test(url);
+}
+
+function isYouTubeUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return /^https:\/\/(www\.|m\.)?youtube\.com\//.test(url);
+}
+
+async function manualSkip(tabId: number): Promise<TabReply | { kind: "send-failed"; reason: string }> {
+  return new Promise((resolve) => {
+    const msg: TabMsg = { kind: "manual-skip" };
+    chrome.tabs.sendMessage(tabId, msg, (reply: TabReply | undefined) => {
+      const err = chrome.runtime.lastError;
+      if (err) {
+        resolve({ kind: "send-failed", reason: err.message ?? "unknown" });
+        return;
+      }
+      if (!reply) {
+        resolve({ kind: "send-failed", reason: "content script returned nothing" });
+        return;
+      }
+      resolve(reply);
+    });
+  });
+}
 
 function fmtPause(until: number | null): string | null {
   if (until === null) return null;
@@ -16,6 +50,8 @@ function Popup() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<chrome.tabs.Tab | null>(null);
+  const [skipResult, setSkipResult] = useState<string | null>(null);
 
   const refresh = async () => {
     const s = await send({ kind: "get-settings" });
@@ -24,6 +60,7 @@ function Popup() {
     if (t.kind === "stats") setStats(t.stats);
     const e = await send({ kind: "get-last-error" });
     if (e.kind === "last-error") setLastError(e.error);
+    setActiveTab(await getActiveTab());
   };
 
   useEffect(() => {
@@ -31,6 +68,16 @@ function Popup() {
     const id = setInterval(refresh, 1500);
     return () => clearInterval(id);
   }, []);
+
+  const onSkip = async () => {
+    if (!activeTab?.id) return;
+    setSkipResult("…");
+    const reply = await manualSkip(activeTab.id);
+    if (reply.kind === "skipped") setSkipResult(`Skipped (${reply.method})`);
+    else if (reply.kind === "skip-failed") setSkipResult(`Failed: ${reply.reason}`);
+    else setSkipResult(`No response: ${reply.reason}`);
+    setTimeout(() => setSkipResult(null), 2000);
+  };
 
   if (!settings || !stats) return <p>Loading…</p>;
 
@@ -71,13 +118,31 @@ function Popup() {
     stats.scoreCount > 0 ? Math.round(stats.scoreSum / stats.scoreCount) : 0;
   const pauseLabel = fmtPause(settings.pausedUntil);
   const apiKeyMissing = !settings.apiKey;
+  const onShorts = isShortsUrl(activeTab?.url);
+  const onYouTube = isYouTubeUrl(activeTab?.url);
 
   return (
     <>
       <h2>FeedFixer</h2>
       <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>
         {settings.enabled ? "Filtering active" : "Disabled"}
+        {onYouTube ? (onShorts ? " · on Shorts" : " · on YouTube") : " · not on YouTube"}
       </p>
+
+      <button
+        className="primary"
+        style={{ width: "100%", padding: "10px", fontSize: 14, marginBottom: 8 }}
+        disabled={!onShorts}
+        onClick={() => void onSkip()}
+        title={onShorts ? "Skip the current Short" : "Open a YouTube Short to enable"}
+      >
+        ⬇ Skip current Short
+      </button>
+      {skipResult && (
+        <p className="hint" style={{ margin: "0 0 12px", textAlign: "center" }}>
+          {skipResult}
+        </p>
+      )}
 
       {apiKeyMissing && (
         <div className="pause-banner">

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Filter YouTube feeds with an LLM enrichment classifier and a junk-quota slider.",
   "minimum_chrome_version": "114",
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "activeTab"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
