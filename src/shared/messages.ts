@@ -1,4 +1,4 @@
-import type { ScoredReel, Settings } from "./types";
+import type { ScoredReel, SessionLock, Settings } from "./types";
 
 /** Messages from popup → content script (via chrome.tabs.sendMessage) */
 export type TabMsg = { kind: "manual-skip" };
@@ -6,19 +6,22 @@ export type TabReply =
   | { kind: "skipped"; method: string }
   | { kind: "skip-failed"; reason: string };
 
-/** Messages from content script / popup → service worker (via chrome.runtime.sendMessage) */
+/** Messages from content script / popup → service worker */
 export type Msg =
   | { kind: "score-reel"; videoId: string }
   | { kind: "get-settings" }
   | { kind: "set-settings"; settings: Partial<Settings> }
   | { kind: "get-last-verdict" }
-  | { kind: "get-last-error" };
+  | { kind: "get-last-error" }
+  | { kind: "get-lock" }
+  | { kind: "unlock-session" };
 
 export type Reply =
   | { kind: "verdict"; result: ScoredReel; autoSkipEnabled: boolean }
   | { kind: "settings"; settings: Settings }
   | { kind: "last-verdict"; result: ScoredReel | null }
   | { kind: "last-error"; error: string | null }
+  | { kind: "lock"; lock: SessionLock | null }
   | { kind: "ok" }
   | { kind: "error"; message: string };
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { send } from "../shared/messages";
 import type { TabMsg, TabReply } from "../shared/messages";
-import type { ScoredReel, Settings } from "../shared/types";
+import type { ScoredReel, SessionLock, Settings } from "../shared/types";
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -39,12 +39,21 @@ async function manualSkip(
   });
 }
 
+function fmtAge(ts: number): string {
+  const sec = Math.round((Date.now() - ts) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  return `${Math.floor(min / 60)}h ago`;
+}
+
 function Popup() {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
   const [skipStatus, setSkipStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [verdict, setVerdict] = useState<ScoredReel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lock, setLock] = useState<SessionLock | null>(null);
 
   const refresh = async () => {
     try {
@@ -55,6 +64,8 @@ function Popup() {
       if (v.kind === "last-verdict") setVerdict(v.result);
       const e = await send({ kind: "get-last-error" });
       if (e.kind === "last-error") setError(e.error);
+      const l = await send({ kind: "get-lock" });
+      if (l.kind === "lock") setLock(l.lock);
     } catch {
       // SW idle / restart — silently retry on next tick
     }
@@ -71,6 +82,7 @@ function Popup() {
   const onShorts = isShortsUrl(tab?.url);
   const onYouTube = isYouTubeUrl(tab?.url);
   const apiKeyMissing = !settings.apiKey;
+  const isLocked = lock !== null;
 
   const onSkip = async () => {
     if (!tab?.id) return;
@@ -82,6 +94,13 @@ function Popup() {
     setTimeout(() => setSkipStatus(null), 2000);
   };
 
+  const setLevel = async (level: number) => {
+    if (isLocked) return;
+    setSettings({ ...settings, currentLevel: level });
+    const reply = await send({ kind: "set-settings", settings: { currentLevel: level } });
+    if (reply.kind === "settings") setSettings(reply.settings);
+  };
+
   const toggleAuto = async () => {
     const reply = await send({
       kind: "set-settings",
@@ -90,20 +109,29 @@ function Popup() {
     if (reply.kind === "settings") setSettings(reply.settings);
   };
 
+  const unlock = async () => {
+    await send({ kind: "unlock-session" });
+    await refresh();
+  };
+
+  const stageDesc = settings.stages[settings.currentLevel - 1] ?? "";
+
   return (
     <>
-      <h2>FeedFixer</h2>
-      <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>
-        {onYouTube ? (onShorts ? "On YouTube Shorts" : "On YouTube — open a Short to enable") : "Not on YouTube"}
+      <div className="header">
+        <span className="dot" />
+        <h2>FeedFixer</h2>
+      </div>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 14 }}>
+        {onYouTube ? (onShorts ? "On Shorts" : "On YouTube — open a Short") : "Not on YouTube"}
       </p>
 
       {apiKeyMissing && (
         <div className="error-banner">
-          No API key set.{" "}
+          No API key.{" "}
           <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
-            Open options
-          </a>{" "}
-          to add one.
+            Open settings →
+          </a>
         </div>
       )}
 
@@ -115,10 +143,9 @@ function Popup() {
 
       <button
         className="primary"
-        style={{ width: "100%", padding: "10px", fontSize: 14 }}
+        style={{ width: "100%", padding: "12px", fontSize: 14 }}
         disabled={!onShorts}
         onClick={() => void onSkip()}
-        title={onShorts ? "Manually skip this Short" : "Open a YouTube Short to enable"}
       >
         ⬇ Skip current Short
       </button>
@@ -128,27 +155,57 @@ function Popup() {
         </p>
       )}
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontWeight: 600, fontSize: 13 }}>
+      <div className="section-title">Strictness</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>Level {settings.currentLevel} / 10</span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          {settings.currentLevel <= 3 ? "lenient" : settings.currentLevel <= 6 ? "moderate" : settings.currentLevel <= 8 ? "strict" : "extreme"}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={1}
+        max={10}
+        step={1}
+        value={settings.currentLevel}
+        disabled={isLocked}
+        onChange={(e) => void setLevel(Number(e.target.value))}
+      />
+      <p className="hint" style={{ marginTop: 8, lineHeight: 1.4 }}>
+        {stageDesc}
+      </p>
+
+      {isLocked && (
+        <div className="lock-banner">
+          <span>Locked at level {lock.lockedAtLevel} ({fmtAge(lock.lockedAt)})</span>
+          <button onClick={() => void unlock()}>Unlock</button>
+        </div>
+      )}
+
+      <div className="divider" />
+
+      <div className="toggle-row">
+        <label htmlFor="auto-skip">Auto-skip junk</label>
         <input
+          id="auto-skip"
           type="checkbox"
           checked={settings.autoSkipEnabled}
           onChange={() => void toggleAuto()}
         />
-        Auto-skip when Claude says &quot;Junk&quot;
-      </label>
+      </div>
 
       {verdict && (
         <div className={`verdict-card ${verdict.verdict.toLowerCase()}`}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            Last reel: {verdict.verdict}
+          <div className="verdict-label">Last reel: {verdict.verdict}</div>
+          <div style={{ opacity: 0.85, fontSize: 11, fontFamily: "ui-monospace, Menlo, monospace" }}>
+            {verdict.videoId}
           </div>
-          <div style={{ opacity: 0.85 }}>{verdict.reason}</div>
         </div>
       )}
 
-      <p className="hint" style={{ marginTop: 12, textAlign: "center" }}>
+      <p style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
         <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
-          Edit rubric & API key →
+          Edit stages, rubric & API key →
         </a>
       </p>
     </>

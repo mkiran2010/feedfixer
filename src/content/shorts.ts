@@ -52,39 +52,109 @@ const scoredIds = new Set<string>();
 let lastTriggeredId: string | null = null;
 let triggerTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Auto-advance-on-end state — one listener at a time
+let endWatchVideo: HTMLVideoElement | null = null;
+let endWatchHandler: (() => void) | null = null;
+let endWatchVideoId: string | null = null;
+let lastTimeForLoopDetect = 0;
+
+function detachEndWatcher(): void {
+  if (endWatchVideo && endWatchHandler) {
+    endWatchVideo.removeEventListener("timeupdate", endWatchHandler);
+  }
+  endWatchVideo = null;
+  endWatchHandler = null;
+  endWatchVideoId = null;
+  lastTimeForLoopDetect = 0;
+}
+
+function attachEndWatcher(videoId: string): void {
+  detachEndWatcher();
+  const video = document.querySelector<HTMLVideoElement>(
+    "ytd-reel-video-renderer[is-active] video",
+  );
+  if (!video) {
+    console.log(`[feedfixer] no active <video> to watch for ${videoId}`);
+    return;
+  }
+  endWatchVideo = video;
+  endWatchVideoId = videoId;
+  lastTimeForLoopDetect = video.currentTime;
+
+  endWatchHandler = () => {
+    if (!endWatchVideo || endWatchVideoId !== videoId) return;
+    if (currentShortIdFromUrl() !== videoId) {
+      detachEndWatcher();
+      return;
+    }
+    const t = endWatchVideo.currentTime;
+    const dur = endWatchVideo.duration;
+    const looped = t < lastTimeForLoopDetect - 1; // currentTime jumped backward
+    const nearEnd = isFinite(dur) && dur > 0 && dur - t < 0.25;
+    lastTimeForLoopDetect = t;
+    if (looped || nearEnd) {
+      console.log(`[feedfixer] reel ${videoId} ended (looped=${looped} nearEnd=${nearEnd}) — advancing`);
+      const method = skipCurrentShort();
+      console.log(`[feedfixer] auto-advance via ${method}`);
+      detachEndWatcher();
+    }
+  };
+
+  video.addEventListener("timeupdate", endWatchHandler);
+  console.log(`[feedfixer] end-watcher attached to ${videoId}`);
+}
+
 async function triggerScore(videoId: string): Promise<void> {
   if (scoredIds.has(videoId)) return;
   scoredIds.add(videoId);
   console.log(`[feedfixer] requesting score for ${videoId}`);
+  let reply;
   try {
-    const reply = await send({ kind: "score-reel", videoId });
-    if (reply.kind !== "verdict") {
-      console.warn(`[feedfixer] unexpected reply for ${videoId}:`, reply);
-      return;
-    }
-    const { verdict, reason } = reply.result;
-    console.log(`[feedfixer] ${videoId} → ${verdict} (${reason})`);
-    if (
-      verdict === "Junk" &&
-      reply.autoSkipEnabled &&
-      currentShortIdFromUrl() === videoId
-    ) {
-      // Only skip if the user is still on this Short; don't yank them out of something they navigated to
-      const method = skipCurrentShort();
-      console.log(`[feedfixer] auto-skipped ${videoId} via ${method}`);
-    }
+    reply = await send({ kind: "score-reel", videoId });
   } catch (err) {
     console.error(`[feedfixer] score-reel failed for ${videoId}:`, err);
+    return;
+  }
+  if (reply.kind !== "verdict") {
+    console.warn(`[feedfixer] unexpected reply for ${videoId}:`, reply);
+    return;
+  }
+  const { verdict } = reply.result;
+  console.log(`[feedfixer] ${videoId} → ${verdict}`);
+  if (
+    verdict === "Junk" &&
+    reply.autoSkipEnabled &&
+    currentShortIdFromUrl() === videoId
+  ) {
+    const method = skipCurrentShort();
+    console.log(`[feedfixer] auto-skipped ${videoId} via ${method}`);
+    return;
+  }
+
+  // Stay verdict — set up auto-advance-on-end if the user enabled it
+  let settings;
+  try {
+    const r = await send({ kind: "get-settings" });
+    settings = r.kind === "settings" ? r.settings : null;
+  } catch {
+    settings = null;
+  }
+  if (settings?.autoAdvanceOnEnd && currentShortIdFromUrl() === videoId) {
+    // Defer slightly so the active <video> for this reel is in DOM
+    setTimeout(() => attachEndWatcher(videoId), 250);
   }
 }
 
 function checkForNewActiveReel(): void {
   const id = currentShortIdFromUrl();
-  if (!id) return;
+  if (!id) {
+    detachEndWatcher();
+    return;
+  }
   if (id === lastTriggeredId) return;
   lastTriggeredId = id;
+  detachEndWatcher();
 
-  // Debounce — let YouTube settle on the new reel before scoring
   if (triggerTimer) clearTimeout(triggerTimer);
   triggerTimer = setTimeout(() => {
     triggerTimer = null;
@@ -94,11 +164,7 @@ function checkForNewActiveReel(): void {
 
 export function startReelWatcher(): void {
   checkForNewActiveReel();
-
-  // YouTube emits this on SPA nav between Shorts
   document.addEventListener("yt-navigate-finish", checkForNewActiveReel);
   window.addEventListener("popstate", checkForNewActiveReel);
-
-  // Belt-and-suspenders: also poll every 500ms for URL changes the events miss
   setInterval(checkForNewActiveReel, 500);
 }

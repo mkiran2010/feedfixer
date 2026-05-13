@@ -6,11 +6,15 @@
     <title>FeedFixer — Options</title>
     <link rel="stylesheet" href="./styles.css" />
     <style>
-      .container { max-width: 720px; margin: 32px auto; padding: 24px; }
-      h1 { margin-top: 0; }
-      .actions { display: flex; gap: 8px; margin-top: 24px; }
-      .saved { color: #2e7d32; font-size: 13px; opacity: 0; transition: opacity 0.2s; }
+      .container { max-width: 760px; margin: 40px auto; padding: 32px; }
+      .container h1 { font-size: 28px; margin-bottom: 4px; }
+      .actions { display: flex; gap: 12px; align-items: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
+      .saved { color: var(--stay); font-size: 13px; opacity: 0; transition: opacity 0.2s; font-weight: 600; }
       .saved.show { opacity: 1; }
+      .stage-row { display: grid; grid-template-columns: 50px 1fr; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+      .stage-row:last-child { border-bottom: none; }
+      .stage-num { font-size: 22px; font-weight: 800; color: var(--primary); text-align: center; padding-top: 8px; }
+      .stage-row textarea { font-size: 13px; min-height: 50px; }
     </style>
   </head>
   <body>

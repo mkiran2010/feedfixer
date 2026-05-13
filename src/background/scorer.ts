@@ -26,7 +26,6 @@ function parseVerdict(text: string): { verdict: "Junk" | "Stay"; reason: string 
   if (/\bstay\b/.test(lower) && !/\bjunk\b/.test(lower)) {
     return { verdict: "Stay", reason: trimmed };
   }
-  // Ambiguous — default to Stay (don't skip something that might be good)
   return { verdict: "Stay", reason: `unparseable: ${trimmed.slice(0, 80)}` };
 }
 
@@ -38,6 +37,12 @@ interface ClaudeContentBlock {
 interface ClaudeResponse {
   content?: ClaudeContentBlock[];
   error?: { message?: string; type?: string };
+}
+
+function levelDescription(settings: Settings): string {
+  const level = Math.min(10, Math.max(1, settings.currentLevel));
+  const desc = settings.stages[level - 1] ?? "";
+  return `Strictness level ${level}/10 — ${desc}`;
 }
 
 export async function scoreReel(
@@ -60,9 +65,10 @@ export async function scoreReel(
       {
         role: "user",
         content:
+          `${levelDescription(settings)}\n\n` +
           `Title: ${meta.title}\n` +
           `Channel: ${meta.channel}\n\n` +
-          `Reply with EXACTLY one word: "Junk" or "Stay". No punctuation, no explanation.`,
+          `Reply with EXACTLY one word: "Junk" or "Stay".`,
       },
     ],
   };

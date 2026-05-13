@@ -1,10 +1,11 @@
 import type { Msg, Reply } from "../shared/messages";
-import type { ScoredReel } from "../shared/types";
+import type { ScoredReel, SessionLock } from "../shared/types";
 import { loadSettings, saveSettings } from "../shared/settings";
 import { fetchMeta, scoreReel } from "./scorer";
 
 const LAST_VERDICT_KEY = "feedfixer.lastVerdict";
 const LAST_ERROR_KEY = "feedfixer.lastError";
+const LOCK_KEY = "feedfixer.lock";
 
 async function recordVerdict(v: ScoredReel): Promise<void> {
   await chrome.storage.session.set({ [LAST_VERDICT_KEY]: v });
@@ -28,14 +29,31 @@ async function readError(): Promise<string | null> {
   return (got[LAST_ERROR_KEY] as string | undefined) ?? null;
 }
 
+async function readLock(): Promise<SessionLock | null> {
+  const got = await chrome.storage.session.get(LOCK_KEY);
+  return (got[LOCK_KEY] as SessionLock | undefined) ?? null;
+}
+
+async function ensureLocked(currentLevel: number): Promise<void> {
+  const existing = await readLock();
+  if (existing) return;
+  const lock: SessionLock = { lockedAt: Date.now(), lockedAtLevel: currentLevel };
+  await chrome.storage.session.set({ [LOCK_KEY]: lock });
+}
+
+async function unlockSession(): Promise<void> {
+  await chrome.storage.session.remove(LOCK_KEY);
+}
+
 async function handleScoreReel(videoId: string): Promise<ScoredReel> {
   const settings = await loadSettings();
   const meta = await fetchMeta(videoId);
-  console.log(`[feedfixer] scoring ${videoId}: "${meta.title}" / ${meta.channel}`);
+  console.log(`[feedfixer] scoring ${videoId}: "${meta.title}" / ${meta.channel} @ level ${settings.currentLevel}`);
   const result = await scoreReel(meta, settings);
   await recordVerdict(result);
+  await ensureLocked(settings.currentLevel);
   await clearError();
-  console.log(`[feedfixer] verdict ${videoId}: ${result.verdict} — ${result.reason}`);
+  console.log(`[feedfixer] verdict ${videoId}: ${result.verdict}`);
   return result;
 }
 
@@ -63,12 +81,31 @@ async function handle(msg: Msg): Promise<Reply> {
     }
     case "get-settings":
       return { kind: "settings", settings: await loadSettings() };
-    case "set-settings":
+    case "set-settings": {
+      // Block changes to currentLevel / stages while locked
+      const lock = await readLock();
+      if (lock) {
+        const blocked: (keyof typeof msg.settings)[] = ["currentLevel", "stages"];
+        for (const k of blocked) {
+          if (k in msg.settings) {
+            return {
+              kind: "error",
+              message: `${k} is locked for this session — unlock first`,
+            };
+          }
+        }
+      }
       return { kind: "settings", settings: await saveSettings(msg.settings) };
+    }
     case "get-last-verdict":
       return { kind: "last-verdict", result: await readLastVerdict() };
     case "get-last-error":
       return { kind: "last-error", error: await readError() };
+    case "get-lock":
+      return { kind: "lock", lock: await readLock() };
+    case "unlock-session":
+      await unlockSession();
+      return { kind: "ok" };
   }
 }
 
