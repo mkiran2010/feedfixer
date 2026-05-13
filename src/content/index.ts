@@ -1,7 +1,11 @@
 import type { TabMsg, TabReply } from "../shared/messages";
-import { skipCurrentShort } from "./shorts";
+import { skipCurrentShort, startReelWatcher } from "./shorts";
 
 console.log(`[feedfixer] content script loaded on ${window.location.pathname}`);
+
+// Watcher is idempotent across non-shorts pages (it no-ops when URL isn't /shorts/),
+// so always start it — that way SPA navigation INTO /shorts/ is covered too.
+startReelWatcher();
 
 chrome.runtime.onMessage.addListener(
   (msg: TabMsg, _sender, sendResponse: (reply: TabReply) => void) => {

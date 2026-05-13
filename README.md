@@ -1,8 +1,12 @@
-# FeedFixer
+# FeedFixer — `metadata-analysis` branch
 
-Chrome/Edge extension that adds a manual "Skip current Short" button to YouTube. Click the toolbar icon while watching a YouTube Short, hit the button, the Short advances. That's it.
+Auto-skip junk YouTube Shorts using Claude metadata classification.
 
-This `main` branch is the minimal, working baseline. The metadata-driven auto-skip lives on the `metadata-analysis` branch.
+This branch builds on `main`'s working manual-skip and adds:
+- Detect every new active Short via URL polling + `yt-navigate-finish`
+- Fetch title + channel via YouTube's public oEmbed endpoint (no key needed)
+- Send to Claude (Haiku 4.5 by default) with a one-word verdict prompt: `Junk` or `Stay`
+- If `Junk` and the user is still on that Short, silently call the proven `skipCurrentShort()`
 
 ## Build & install
 
@@ -13,36 +17,28 @@ npm run build
 
 Then in Chrome:
 
-1. `chrome://extensions`
-2. Enable **Developer mode** (top right)
-3. Click **Load unpacked** and select the `dist/` folder
-4. Open a YouTube Short, click the FeedFixer toolbar icon, hit "⬇ Skip current Short"
+1. `chrome://extensions` → Developer mode → Load unpacked → select `dist/`
+2. Click **FeedFixer → Edit rubric & API key →** paste an Anthropic API key from <https://console.anthropic.com/settings/keys> → **Save**
+3. Open a YouTube Short, watch the popup — last verdict + reason shows up
+4. Toggle **"Auto-skip when Claude says Junk"** to enable/disable the silent skip
 
-## How it works
-
-- Popup queries the active tab via `chrome.tabs.query`
-- Button enabled only when URL matches `/shorts/`
-- On click, popup sends `{kind: "manual-skip"}` to the active tab via `chrome.tabs.sendMessage`
-- Content script on YouTube tabs listens for that message
-- Skip routine tries three approaches in order, returns the first that succeeds:
-  1. Click YouTube's own down-arrow button
-  2. Dispatch a synthetic `ArrowDown` keydown
-  3. Scroll the next reel into view
-- Status is shown under the button: "Skipped (nav-button)" / "Skipped (keydown)" / etc.
-
-## Project layout
+## Architecture
 
 ```
-src/
-├── content/
-│   ├── index.ts     # listens for manual-skip messages
-│   └── shorts.ts    # skipCurrentShort() — the actual skip routine
-├── ui/
-│   ├── popup.html
-│   ├── popup.tsx    # the button + active-tab detection
-│   └── styles.css
-└── shared/
-    └── messages.ts  # TabMsg / TabReply contract
+content script              service worker            Anthropic API
+─────────────────           ───────────────           ─────────────
+URL poll detects new ─────▶ score-reel ────▶ fetch oEmbed ──┐
+active Short                                                 │
+                            ◀──── verdict ──── Claude ◀──────┘
+auto-skip if "Junk"
++ user still here
 ```
 
-No service worker. No API keys. No background processing. Just popup → content script → DOM.
+- Content script: `src/content/shorts.ts` — `startReelWatcher()` polls URL every 500ms
+- Service worker: `src/background/service-worker.ts` + `scorer.ts`
+- oEmbed: `https://www.youtube.com/oembed?url=…/shorts/{id}&format=json` (no auth)
+- Claude: Haiku 4.5 with prompt-cached rubric
+
+## Costs
+
+Each Short = one Claude call. Title + channel (~30 tokens in) + 1 word out (`Junk` or `Stay`). With Haiku 4.5 ($1/$5 per 1M tokens) and rubric caching, expect ~$0.0001 per Short — about 1 cent per 100 Shorts viewed.

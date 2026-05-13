@@ -34,7 +34,7 @@ button {
 button:hover { background: #f0f0f0; }
 button.primary { background: #1a73e8; color: white; border-color: #1a73e8; }
 button.primary:hover { background: #1557b0; }
-button.danger { color: #c62828; border-color: #c62828; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 input[type="text"], input[type="password"], textarea, select {
   width: 100%;
@@ -51,25 +51,38 @@ textarea {
   resize: vertical;
 }
 
-label {
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.field {
-  margin-bottom: 18px;
-}
-
-.hint {
-  font-size: 12px;
-  color: #666;
-  margin-top: 4px;
-}
+label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
+.field { margin-bottom: 18px; }
+.hint { font-size: 12px; color: #666; margin-top: 4px; }
 
 @media (prefers-color-scheme: dark) {
   .hint { color: #aaa; }
   button { background: #333; border-color: #555; }
   button:hover { background: #404040; }
+}
+
+.verdict-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.verdict-card.junk { border-color: #c62828; background: #fee; color: #7a1c1c; }
+.verdict-card.stay { border-color: #2e7d32; background: #efe; color: #1b5e20; }
+
+@media (prefers-color-scheme: dark) {
+  .verdict-card { background: #2a2a2a; border-color: #444; }
+  .verdict-card.junk { background: #3a1010; border-color: #c62828; color: #ffb4b4; }
+  .verdict-card.stay { background: #103a10; border-color: #2e7d32; color: #b4ffb4; }
+}
+
+.error-banner {
+  background: #fde2e2;
+  color: #7a1c1c;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 8px 0;
 }

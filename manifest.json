@@ -1,14 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "FeedFixer",
-  "version": "0.2.0",
-  "description": "Manual skip button for YouTube Shorts.",
+  "name": "FeedFixer (metadata)",
+  "version": "0.3.0",
+  "description": "Auto-skip junk YouTube Shorts using Claude metadata classification.",
   "minimum_chrome_version": "114",
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://m.youtube.com/*"
+    "https://m.youtube.com/*",
+    "https://api.anthropic.com/*"
   ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
@@ -20,5 +25,9 @@
   "action": {
     "default_popup": "src/ui/popup.html",
     "default_title": "FeedFixer"
+  },
+  "options_ui": {
+    "page": "src/ui/options.html",
+    "open_in_tab": true
   }
 }
