@@ -1,8 +1,8 @@
-# FeedFixer
+# Syte
 
 > Auto-skip junk YouTube Shorts using Chrome's on-device AI. No API key. No spend. No data leaves your browser unless you opt in.
 
-FeedFixer watches the YouTube Shorts feed, asks Chrome's built-in Gemini Nano model whether each reel is "Junk" or "Stay" based on a strictness level you set, and silently advances past anything classified as junk. The strictness level **locks** once you start scrolling — so you can't talk yourself into loosening it mid-session when willpower drops.
+Syte watches the YouTube Shorts feed, asks Chrome's built-in Gemini Nano model whether each reel is "Junk" or "Stay" based on a strictness level you set, and silently advances past anything classified as junk. The strictness level **locks** once you start scrolling — so you can't talk yourself into loosening it mid-session when willpower drops.
 
 ---
 
@@ -18,7 +18,7 @@ FeedFixer watches the YouTube Shorts feed, asks Chrome's built-in Gemini Nano mo
 - **Node.js 18+ and npm** to build the extension. Get it at <https://nodejs.org/> (the LTS download is fine).
 - **Git** to clone the repo. Already installed on macOS and most Linux distros; on Windows get it at <https://git-scm.com/>.
 
-If any of those aren't true, FeedFixer won't run.
+If any of those aren't true, Syte won't run.
 
 ---
 
@@ -29,8 +29,8 @@ These steps work on Windows, macOS, and Linux. Open a terminal (Command Prompt o
 ### 1. Get the code
 
 ```sh
-git clone https://github.com/mkiran2010/feedfixer.git
-cd feedfixer
+git clone https://github.com/mkiran2010/syte.git
+cd syte
 ```
 
 ### 2. Build it
@@ -49,11 +49,11 @@ That produces a `dist/` folder containing the loadable extension. The first `npm
 3. Click **Load unpacked** (top-left).
 4. Pick the `dist/` folder you just built.
 
-You should see the FeedFixer icon (purple film-reel) appear in your Chrome toolbar.
+You should see the Syte icon (purple film-reel) appear in your Chrome toolbar.
 
 ### 4. Verify the on-device AI is ready
 
-1. Click the FeedFixer toolbar icon to open the popup.
+1. Click the Syte toolbar icon to open the popup.
 2. Look at the small status text near the top:
    - **"on-device AI ready"** (green) — you're set, skip to "Use it" below.
    - **"model not yet downloaded"** (yellow) — click the **Download** button. Gemini Nano will download in the background (~1.7GB). Comes back as "ready" when done.
@@ -65,7 +65,7 @@ You should see the FeedFixer icon (purple film-reel) appear in your Chrome toolb
 
 1. Open a YouTube Short — go to <https://www.youtube.com/shorts> or click any Short link.
 2. The first reel takes ~15 seconds to classify (the model is warming up). After that, every reel is classified within ~1 second.
-3. Click the FeedFixer toolbar icon to:
+3. Click the Syte toolbar icon to:
    - **Adjust strictness** with the 1–10 slider (changes which kinds of content get classified as Junk)
    - **See recent verdicts** in the popup's "Recent reels" list — junk reels get a pink badge, stay reels get a mint badge
    - **Toggle auto-skip** on/off
@@ -79,7 +79,7 @@ Click "Edit rules →" at the bottom of the popup to open the options page. Swit
 
 ## What gets shared
 
-By default, FeedFixer uploads a small record of each classification to a central database to help improve the filter. Each upload contains a random anonymous install ID, the videoId/title/channel of the Short, the verdict, and your strictness level — **no name, email, or other identifying info**.
+By default, Syte uploads a small record of each classification to a central database to help improve the filter. Each upload contains a random anonymous install ID, the videoId/title/channel of the Short, the verdict, and your strictness level — **no name, email, or other identifying info**.
 
 To opt out: open the options page → toggle off **"Share classified-reel data"**.
 
@@ -91,11 +91,11 @@ Full details: [PRIVACY.md](./PRIVACY.md).
 
 | Symptom | Fix |
 |---|---|
-| "Cannot connect to localhost:5173" page on toolbar click | You ran `npm run dev` instead of `npm run build`. Run `npm run build`, then in `chrome://extensions` click the reload icon on the FeedFixer card. |
+| "Cannot connect to localhost:5173" page on toolbar click | You ran `npm run dev` instead of `npm run build`. Run `npm run build`, then in `chrome://extensions` click the reload icon on the Syte card. |
 | Popup says "Local AI unavailable" | Your Chrome version is too old (need 138+) or your OS isn't supported. Update Chrome via `chrome://settings/help`. |
-| Reels aren't being classified | (1) Reload the FeedFixer extension card. (2) Reload the YouTube tab itself with Ctrl+R. The content script in already-open tabs becomes orphaned after an extension reload. |
+| Reels aren't being classified | (1) Reload the Syte extension card. (2) Reload the YouTube tab itself with Ctrl+R. The content script in already-open tabs becomes orphaned after an extension reload. |
 | First reel takes forever | Cold-start of the model. Subsequent reels are fast. Future versions will pre-warm. |
-| 401 errors for some videos | YouTube's metadata endpoint refuses age-restricted/private/region-blocked videos. FeedFixer defaults those to "Stay" (won't auto-skip). Not a bug. |
+| 401 errors for some videos | YouTube's metadata endpoint refuses age-restricted/private/region-blocked videos. Syte defaults those to "Stay" (won't auto-skip). Not a bug. |
 | Extension reloads breaking things | Always reload extension card AND the YouTube tab. The two-step matters. |
 
 ---

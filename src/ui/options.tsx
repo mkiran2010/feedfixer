@@ -74,7 +74,7 @@ function Options() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `feedfixer-verdicts-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `syte-verdicts-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -95,7 +95,7 @@ function Options() {
 
   return (
     <>
-      <h1>FeedFixer</h1>
+      <h1>Syte</h1>
       <p className="hint" style={{ fontSize: 14, marginBottom: 24 }}>
         On-device AI filter for YouTube Shorts. No API key, no data leaves your browser.
       </p>
@@ -126,7 +126,7 @@ function Options() {
           {aiBadgeText(localAI)}
         </div>
         <p className="hint" style={{ marginTop: 0 }}>
-          FeedFixer uses Chrome's built-in <strong>Gemini Nano</strong> model. It runs entirely
+          Syte uses Chrome's built-in <strong>Gemini Nano</strong> model. It runs entirely
           on your device — no API key, no requests to a server, no spending. Requires Chrome 138+
           on Windows 10/11, macOS 13+, Linux, or ChromeOS.
         </p>
@@ -279,7 +279,7 @@ function Options() {
         <div>
           <label htmlFor="upload">Share classified-reel data</label>
           <p className="hint">
-            Send each verdict to the FeedFixer database to help improve the filter. Each upload
+            Send each verdict to the Syte database to help improve the filter. Each upload
             includes: a random anonymous install ID, videoId, title, channel, verdict
             (Junk/Stay), strictness level, and your custom rule if you set one. No identifying
             data about you personally — but the videoId+title pair is public YouTube metadata.

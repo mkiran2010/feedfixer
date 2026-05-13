@@ -76,12 +76,12 @@ function attachWatcher(videoId: string): void {
   detachWatcher();
   watcherVideoId = videoId;
   watcherFireCount = 0;
-  console.log(`[feedfixer] attaching end-watcher for ${videoId}`);
+  console.log(`[syte] attaching end-watcher for ${videoId}`);
 
   watcherInterval = setInterval(() => {
     if (watcherVideoId !== videoId) return;
     if (currentShortIdFromUrl() !== videoId) {
-      console.log(`[feedfixer] reel changed away from ${videoId}, detaching watcher`);
+      console.log(`[syte] reel changed away from ${videoId}, detaching watcher`);
       detachWatcher();
       return;
     }
@@ -97,10 +97,10 @@ function attachWatcher(videoId: string): void {
     if (watcherFireCount === 0 && (looped || nearEnd)) {
       watcherFireCount++;
       console.log(
-        `[feedfixer] reel ${videoId} ended (t=${t.toFixed(2)} dur=${dur.toFixed(2)} looped=${looped} nearEnd=${nearEnd}) — auto-advancing`,
+        `[syte] reel ${videoId} ended (t=${t.toFixed(2)} dur=${dur.toFixed(2)} looped=${looped} nearEnd=${nearEnd}) — auto-advancing`,
       );
       const method = skipCurrentShort();
-      console.log(`[feedfixer] auto-advance via ${method}`);
+      console.log(`[syte] auto-advance via ${method}`);
       detachWatcher();
       return;
     }
@@ -111,21 +111,21 @@ function attachWatcher(videoId: string): void {
 
 async function triggerScore(videoId: string): Promise<void> {
   if (scoredIds.has(videoId)) return;
-  console.log(`[feedfixer] requesting score for ${videoId}`);
+  console.log(`[syte] requesting score for ${videoId}`);
   let reply;
   try {
     reply = await send({ kind: "score-reel", videoId });
   } catch (err) {
-    console.error(`[feedfixer] score-reel failed for ${videoId}, will retry on next reel-change:`, err);
+    console.error(`[syte] score-reel failed for ${videoId}, will retry on next reel-change:`, err);
     return; // do NOT add to scoredIds — let the next trigger retry
   }
   scoredIds.add(videoId);
   if (reply.kind !== "verdict") {
-    console.warn(`[feedfixer] unexpected reply for ${videoId}:`, reply);
+    console.warn(`[syte] unexpected reply for ${videoId}:`, reply);
     return;
   }
   const { verdict } = reply.result;
-  console.log(`[feedfixer] ${videoId} → ${verdict}`);
+  console.log(`[syte] ${videoId} → ${verdict}`);
 
   if (
     verdict === "Junk" &&
@@ -133,13 +133,13 @@ async function triggerScore(videoId: string): Promise<void> {
     currentShortIdFromUrl() === videoId
   ) {
     const method = skipCurrentShort();
-    console.log(`[feedfixer] auto-skipped junk ${videoId} via ${method}`);
+    console.log(`[syte] auto-skipped junk ${videoId} via ${method}`);
     detachWatcher(); // skip will trigger reel change which detaches anyway
     return;
   }
 
   if (!reply.autoAdvanceOnEnd) {
-    console.log(`[feedfixer] auto-advance disabled, detaching watcher`);
+    console.log(`[syte] auto-advance disabled, detaching watcher`);
     detachWatcher();
   }
 }
@@ -151,7 +151,7 @@ function checkForNewActiveReel(): void {
     return;
   }
   if (id === lastTriggeredId) return;
-  console.log(`[feedfixer] new active reel detected: ${id}`);
+  console.log(`[syte] new active reel detected: ${id}`);
   lastTriggeredId = id;
 
   // Attach the end-watcher IMMEDIATELY, don't wait for verdict.

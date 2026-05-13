@@ -1,6 +1,6 @@
 # Coming soon — roadmap
 
-Active backlog of FeedFixer improvements, ranked by perceived impact. Captured 2026-05-13 after the first end-to-end Supabase data collection went live.
+Active backlog of Syte improvements, ranked by perceived impact. Captured 2026-05-13 after the first end-to-end Supabase data collection went live.
 
 ## Tier 1 — biggest perceptual leaps
 

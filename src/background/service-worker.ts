@@ -5,9 +5,9 @@ import { appendLog, clearLog, getLog } from "../shared/verdict-log";
 import { checkLocalAI, fetchMeta, scoreReel, triggerLocalAIDownload } from "./scorer";
 import { uploadVerdict } from "./upload";
 
-const LAST_VERDICT_KEY = "feedfixer.lastVerdict";
-const LAST_ERROR_KEY = "feedfixer.lastError";
-const LOCK_KEY = "feedfixer.lock";
+const LAST_VERDICT_KEY = "syte.lastVerdict";
+const LAST_ERROR_KEY = "syte.lastError";
+const LOCK_KEY = "syte.lock";
 
 async function recordVerdict(v: ScoredReel): Promise<void> {
   await chrome.storage.session.set({ [LAST_VERDICT_KEY]: v });
@@ -64,7 +64,7 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
     meta = await fetchMeta(videoId);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    console.warn(`[feedfixer] oembed refused ${videoId} (${reason}) — defaulting to Stay`);
+    console.warn(`[syte] oembed refused ${videoId} (${reason}) — defaulting to Stay`);
     const result: ScoredReel = {
       videoId,
       verdict: "Stay",
@@ -86,7 +86,7 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
     return result;
   }
 
-  console.log(`[feedfixer] scoring ${videoId}: "${meta.title}" / ${meta.channel} @ level ${settings.currentLevel}`);
+  console.log(`[syte] scoring ${videoId}: "${meta.title}" / ${meta.channel} @ level ${settings.currentLevel}`);
   const result = await scoreReel(meta, settings);
   const logEntry = {
     videoId: meta.videoId,
@@ -105,7 +105,7 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
     settings.useCustomInstruction ? settings.customInstruction : null,
   );
   await clearError();
-  console.log(`[feedfixer] verdict ${videoId}: ${result.verdict}`);
+  console.log(`[syte] verdict ${videoId}: ${result.verdict}`);
   return result;
 }
 
@@ -116,7 +116,7 @@ chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
       sendResponse(reply);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error("[feedfixer] handler error:", err);
+      console.error("[syte] handler error:", err);
       await recordError(message);
       sendResponse({ kind: "error", message } satisfies Reply);
     }
@@ -179,4 +179,4 @@ async function handle(msg: Msg): Promise<Reply> {
   }
 }
 
-console.log("[feedfixer] service worker ready (locality / local AI mode)");
+console.log("[syte] service worker ready (locality / local AI mode)");

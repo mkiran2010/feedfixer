@@ -119,7 +119,7 @@ export async function triggerLocalAIDownload(): Promise<LocalAIStatus> {
       monitor: (m) =>
         m.addEventListener("downloadprogress", (e) => {
           progressPct = e.total > 0 ? Math.round((e.loaded / e.total) * 100) : 0;
-          console.log(`[feedfixer] model download ${progressPct}%`);
+          console.log(`[syte] model download ${progressPct}%`);
         }),
     });
     session.destroy();

@@ -1,18 +1,18 @@
 {
-  "name": "feedfixer",
-  "version": "0.3.0-metadata",
+  "name": "syte",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Auto-skip junk YouTube Shorts via Claude metadata classification.",
+  "description": "Auto-skip junk YouTube Shorts using Chrome's on-device AI.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "feedfixer": "file:",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "syte": "file:"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.32",

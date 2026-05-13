@@ -1,6 +1,6 @@
 # lenny.md — context handoff for the next Claude session
 
-You are picking up `feedfixer`, a browser extension the user is iterating on. This file gives you everything you need to skip the 5-hour ramp-up that the previous Claude went through.
+You are picking up `syte` (originally named `feedfixer` until v0.5.0), a browser extension the user is iterating on. This file gives you everything you need to skip the 5-hour ramp-up that the previous Claude went through.
 
 ---
 
@@ -17,7 +17,7 @@ So the value prop is **disciplined doomscrolling**: you can't trust YouTube's al
 
 ## 2. Repo state — branches and commits
 
-GitHub: <https://github.com/mkiran2010/feedfixer> (private)
+GitHub: <https://github.com/mkiran2010/syte> (private; renamed from `feedfixer` at v0.5.0)
 
 | Branch | Purpose |
 |---|---|
@@ -111,7 +111,7 @@ In Chrome: `chrome://extensions` → Developer mode → Load unpacked → `dist/
 
 ### After ANY code change — three-step sequence (CRITICAL)
 1. `npm run build` (Chrome doesn't auto-build)
-2. `chrome://extensions` → FeedFixer → **circular reload icon ↻** on the card (Chrome doesn't auto-reload from disk)
+2. `chrome://extensions` → Syte → **circular reload icon ↻** on the card (Chrome doesn't auto-reload from disk)
 3. **Reload the YouTube tab itself** (Ctrl+R on the tab — content script in old tabs gets orphaned otherwise)
 
 Skip any of these → user reports "nothing happens" → 30 minutes of debugging. **Always state all three steps** when telling the user to test.
@@ -142,7 +142,7 @@ Skip any of these → user reports "nothing happens" → 30 minutes of debugging
 
 8. **Vite + crxjs config:** Do NOT put HTML entries in `rollupOptions.input`. crxjs picks them up from the manifest. Doubling them up breaks the html plugin with a confusing "replacement content must be a string" error.
 
-9. **package.json self-reference:** A linter (likely the user's IDE) keeps adding `"feedfixer": "file:"` to dependencies. The system tells me this is intentional. **Leave it alone.** Don't try to remove it — it'll come back.
+9. **package.json self-reference:** A linter (likely the user's IDE) keeps adding `"syte": "file:"` (formerly `"feedfixer": "file:"`) to dependencies. The system tells me this is intentional. **Leave it alone.** Don't try to remove it — it'll come back.
 
 10. **Lock state is in `chrome.storage.session`** so it auto-clears on browser restart but persists across SW unloads. The first successful score-reel call sets `SessionLock` if it doesn't exist. Slider in popup and stage editors in options are disabled when locked.
 

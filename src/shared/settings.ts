@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, type Settings } from "./types";
 
-const KEY = "feedfixer.settings";
+const KEY = "syte.settings";
 
 export async function loadSettings(): Promise<Settings> {
   const got = await chrome.storage.local.get(KEY);

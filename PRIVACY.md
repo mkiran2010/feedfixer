@@ -1,8 +1,8 @@
-# FeedFixer Privacy Policy
+# Syte Privacy Policy
 
 **Last updated:** 2026-05-13
 
-This is the plain-language summary of what FeedFixer does and doesn't do with your data. There is no fine print.
+This is the plain-language summary of what Syte does and doesn't do with your data. There is no fine print.
 
 ## What gets stored locally on your device
 
@@ -18,7 +18,7 @@ For each Short you scroll, we ask YouTube's public oEmbed endpoint for the title
 ### To Chrome's on-device AI
 The title and channel get classified by Gemini Nano, which **runs entirely on your device**. Nothing about the video, your settings, or your activity is sent to Google during this step.
 
-### To FeedFixer's database (Supabase)
+### To Syte's database (Supabase)
 If the **"Share classified-reel data"** toggle is on (default ON, can be turned off in options), every classification is sent to a database we maintain at supabase.co. Each upload includes:
 - Your random anonymous install ID
 - The videoId, title, channel of the YouTube Short
@@ -37,16 +37,16 @@ We do NOT collect:
 - Audio, video, or screen content
 
 ## How to opt out
-Open the FeedFixer options page → toggle off **"Share classified-reel data"**. From that moment, no further uploads happen. Your local log is still kept on your device for the popup's "Recent reels" view.
+Open the Syte options page → toggle off **"Share classified-reel data"**. From that moment, no further uploads happen. Your local log is still kept on your device for the popup's "Recent reels" view.
 
 ## How to delete your data
-Email the project maintainer with your install ID (find it in `chrome://extensions` → FeedFixer → service worker console → run `chrome.storage.local.get('feedfixer.installId', console.log)`). Your rows will be deleted from the database within a reasonable timeframe.
+Email the project maintainer with your install ID (find it in `chrome://extensions` → Syte → service worker console → run `chrome.storage.local.get('syte.installId', console.log)`). Your rows will be deleted from the database within a reasonable timeframe.
 
 ## Where the database lives
 Supabase, hosted on AWS in Virginia, USA.
 
 ## Who runs this
-A solo developer. Source code is open: <https://github.com/mkiran2010/feedfixer>
+A solo developer. Source code is open: <https://github.com/mkiran2010/syte>
 
 ## Contact
 For privacy questions, deletion requests, or anything else: open an issue on GitHub.

@@ -30,9 +30,9 @@ export async function uploadVerdict(entry: VerdictLogEntry): Promise<void> {
       body: JSON.stringify(row),
     });
     if (!r.ok) {
-      console.warn(`[feedfixer] supabase upload ${r.status}:`, await r.text());
+      console.warn(`[syte] supabase upload ${r.status}:`, await r.text());
     }
   } catch (err) {
-    console.warn("[feedfixer] supabase upload error:", err);
+    console.warn("[syte] supabase upload error:", err);
   }
 }

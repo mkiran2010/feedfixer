@@ -1,4 +1,4 @@
-# Publishing FeedFixer to the Chrome Web Store
+# Publishing Syte to the Chrome Web Store
 
 This is the playbook to get the extension off "developer mode unpacked install" and onto a one-click webstore install.
 
@@ -35,7 +35,7 @@ Things we need before submitting:
   - We read the URL of YouTube tabs to detect the active Short
   - We call `https://www.youtube.com/oembed` to fetch title and channel name
   - We send title + channel to Chrome's on-device Gemini Nano model (which Google manages)
-  - We do NOT send anything to FeedFixer servers (we have none)
+  - We do NOT send anything to Syte servers (we have none)
   - We do NOT collect telemetry
 
   The simplest path: host a `PRIVACY.md` markdown file as a GitHub Pages site or as a gist, and link to that.
@@ -53,7 +53,7 @@ Things we need before submitting:
 ```sh
 npm run build          # produces dist/
 cd dist
-zip -r ../feedfixer-v0.4.0.zip *
+zip -r ../syte-v0.5.0.zip *
 ```
 
 The store wants a single ZIP of the extension contents (manifest.json at the root of the ZIP).

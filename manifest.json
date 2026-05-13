@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "FeedFixer (local)",
-  "version": "0.4.0",
+  "name": "Syte",
+  "version": "0.5.0",
   "description": "Auto-skip junk YouTube Shorts using Chrome's on-device AI. No API key, no data leaves your browser.",
   "minimum_chrome_version": "138",
   "permissions": ["activeTab", "storage"],
@@ -30,7 +30,7 @@
   },
   "action": {
     "default_popup": "src/ui/popup.html",
-    "default_title": "FeedFixer",
+    "default_title": "Syte",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

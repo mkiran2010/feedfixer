@@ -1,6 +1,6 @@
 import type { VerdictLogEntry } from "./messages";
 
-const KEY = "feedfixer.verdictLog";
+const KEY = "syte.verdictLog";
 const MAX_ENTRIES = 1000;
 
 export async function getLog(): Promise<VerdictLogEntry[]> {

@@ -1,4 +1,4 @@
 import { startReelWatcher } from "./shorts";
 
-console.log(`[feedfixer] content script loaded on ${window.location.pathname}`);
+console.log(`[syte] content script loaded on ${window.location.pathname}`);
 startReelWatcher();

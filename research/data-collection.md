@@ -35,7 +35,7 @@ What we have now. The log lives in the user's browser. They can export it. We ne
 
 ### Path B — Anonymous opt-in upload to S3
 
-User toggles "Share my verdict log to help improve FeedFixer". Once a day (or on extension uninstall), the SW POSTs the log to a pre-signed S3 URL.
+User toggles "Share my verdict log to help improve Syte". Once a day (or on extension uninstall), the SW POSTs the log to a pre-signed S3 URL.
 
 **What the user has to set up:**
 

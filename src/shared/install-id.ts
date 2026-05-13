@@ -1,4 +1,4 @@
-const KEY = "feedfixer.installId";
+const KEY = "syte.installId";
 
 /** Persistent random UUID per Chrome install. Generated once, never changes. */
 export async function getInstallId(): Promise<string> {

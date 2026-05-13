@@ -107,7 +107,7 @@ function Popup() {
     <>
       <div className="header">
         <span className="dot" style={{ background: aiBadge.color, boxShadow: `0 0 8px ${aiBadge.color}` }} />
-        <h2>FeedFixer</h2>
+        <h2>Syte</h2>
       </div>
       <p className="hint" style={{ marginTop: 0, marginBottom: 6 }}>
         {onYouTube ? (onShorts ? "On Shorts" : "On YouTube — open a Short") : "Not on YouTube"}

@@ -1,4 +1,4 @@
-# FeedFixer — Patch Notes
+# Syte — Patch Notes
 
 ## v0.2.0 — Strip to working baseline
 

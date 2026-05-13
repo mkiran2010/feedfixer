@@ -1,6 +1,6 @@
 # Extension icons
 
-Drop the FeedFixer logo here at exactly these filenames + sizes:
+Drop the Syte logo here at exactly these filenames + sizes:
 
 - `icon-16.png` — 16×16 (toolbar, favicon)
 - `icon-32.png` — 32×32 (Windows)
