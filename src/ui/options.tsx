@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { send } from "../shared/messages";
+import { sendAs } from "../shared/typed-send";
 import {
   DEFAULT_CUSTOM_INSTRUCTION,
   DEFAULT_RUBRIC,
@@ -28,12 +28,9 @@ function Options() {
   const [localAI, setLocalAI] = useState<LocalAIStatus | null>(null);
 
   const refresh = async () => {
-    const r = await send({ kind: "get-settings" });
-    if (r.kind === "settings") setSettings(r.settings);
-    const l = await send({ kind: "get-lock" });
-    if (l.kind === "lock") setLock(l.lock);
-    const ai = await send({ kind: "check-local-ai" });
-    if (ai.kind === "local-ai-status") setLocalAI(ai.status);
+    setSettings((await sendAs({ kind: "get-settings" }, "settings")).settings);
+    setLock((await sendAs({ kind: "get-lock" }, "lock")).lock);
+    setLocalAI((await sendAs({ kind: "check-local-ai" }, "local-ai-status")).status);
   };
 
   useEffect(() => { void refresh(); }, []);
@@ -52,24 +49,39 @@ function Options() {
 
   const save = async () => {
     setError(null);
-    const reply = await send({ kind: "set-settings", settings });
-    if (reply.kind === "settings") {
-      setSettings(reply.settings);
+    try {
+      const r = await sendAs({ kind: "set-settings", settings }, "settings");
+      setSettings(r.settings);
       setSavedAt(Date.now());
-    } else if (reply.kind === "error") {
-      setError(reply.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const unlock = async () => {
-    await send({ kind: "unlock-session" });
+    await sendAs({ kind: "unlock-session" }, "ok");
     await refresh();
   };
 
   const downloadModel = async () => {
     setLocalAI({ kind: "downloading" });
-    const r = await send({ kind: "trigger-local-ai-download" });
-    if (r.kind === "local-ai-status") setLocalAI(r.status);
+    setLocalAI((await sendAs({ kind: "trigger-local-ai-download" }, "local-ai-status")).status);
+  };
+
+  const exportLog = async () => {
+    const r = await sendAs({ kind: "get-verdict-log" }, "verdict-log");
+    const blob = new Blob([JSON.stringify(r.entries, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `feedfixer-verdicts-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearLogStorage = async () => {
+    if (!confirm("Clear all classified-reel history? This is irreversible.")) return;
+    await sendAs({ kind: "clear-verdict-log" }, "ok");
   };
 
   const isLocked = lock !== null;
@@ -261,6 +273,19 @@ function Options() {
           checked={settings.autoAdvanceOnEnd}
           onChange={() => update("autoAdvanceOnEnd", !settings.autoAdvanceOnEnd)}
         />
+      </div>
+
+      <div className="section-title">Classified-reel data</div>
+      <p className="hint" style={{ marginBottom: 12 }}>
+        Every reel scored is logged locally (max 1000 entries, oldest dropped). Each entry stores
+        the videoId, title, channel, verdict, and which strictness level / custom rule was active
+        at the time. Nothing leaves your browser unless you export it.
+      </p>
+      <div className="row" style={{ gap: 8 }}>
+        <button onClick={() => void exportLog()}>Export as JSON</button>
+        <button onClick={() => void clearLogStorage()} style={{ flex: "0 0 auto" }}>
+          Clear log
+        </button>
       </div>
 
       <div className="actions">

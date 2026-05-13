@@ -132,37 +132,33 @@ export async function triggerLocalAIDownload(): Promise<LocalAIStatus> {
   }
 }
 
-let cachedSession: LanguageModelSession | null = null;
-let cachedSessionRubric = "";
-
-async function getSession(systemPrompt: string): Promise<LanguageModelSession> {
-  if (cachedSession && cachedSessionRubric === systemPrompt) return cachedSession;
-  const lm = getLanguageModel();
-  if (!lm) throw new Error("Chrome built-in AI not available — see popup for details");
-  cachedSession?.destroy();
-  cachedSession = await lm.create({
-    initialPrompts: [{ role: "system", content: systemPrompt }],
-  });
-  cachedSessionRubric = systemPrompt;
-  return cachedSession;
-}
-
 export async function scoreReel(
   meta: VideoMeta,
   settings: Settings,
 ): Promise<ScoredReel> {
-  const session = await getSession(settings.rubric);
-  const userPrompt =
-    `${activeFilterDescription(settings)}\n\n` +
-    `Title: ${meta.title}\n` +
-    `Channel: ${meta.channel}\n\n` +
-    `Reply with EXACTLY one word: "Junk" or "Stay".`;
-  const response = await session.prompt(userPrompt);
-  const { verdict, reason } = parseVerdict(response);
-  return {
-    videoId: meta.videoId,
-    verdict,
-    reason,
-    scoredAt: Date.now(),
-  };
+  const lm = getLanguageModel();
+  if (!lm) throw new Error("Chrome built-in AI not available — see popup for details");
+
+  // Fresh session every call — sessions accumulate conversation history per .prompt(),
+  // so reusing one across reels eventually hits the token budget and starts erroring.
+  const session = await lm.create({
+    initialPrompts: [{ role: "system", content: settings.rubric }],
+  });
+  try {
+    const userPrompt =
+      `${activeFilterDescription(settings)}\n\n` +
+      `Title: ${meta.title}\n` +
+      `Channel: ${meta.channel}\n\n` +
+      `Reply with EXACTLY one word: "Junk" or "Stay".`;
+    const response = await session.prompt(userPrompt);
+    const { verdict, reason } = parseVerdict(response);
+    return {
+      videoId: meta.videoId,
+      verdict,
+      reason,
+      scoredAt: Date.now(),
+    };
+  } finally {
+    session.destroy();
+  }
 }

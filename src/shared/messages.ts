@@ -1,11 +1,5 @@
 import type { LocalAIStatus, ScoredReel, SessionLock, Settings } from "./types";
 
-/** Messages from popup → content script (via chrome.tabs.sendMessage) */
-export type TabMsg = { kind: "manual-skip" };
-export type TabReply =
-  | { kind: "skipped"; method: string }
-  | { kind: "skip-failed"; reason: string };
-
 /** Messages from popup / content script → service worker */
 export type Msg =
   | { kind: "score-reel"; videoId: string }
@@ -16,7 +10,9 @@ export type Msg =
   | { kind: "get-lock" }
   | { kind: "unlock-session" }
   | { kind: "check-local-ai" }
-  | { kind: "trigger-local-ai-download" };
+  | { kind: "trigger-local-ai-download" }
+  | { kind: "get-verdict-log" }
+  | { kind: "clear-verdict-log" };
 
 export type Reply =
   | {
@@ -30,8 +26,19 @@ export type Reply =
   | { kind: "last-error"; error: string | null }
   | { kind: "lock"; lock: SessionLock | null }
   | { kind: "local-ai-status"; status: LocalAIStatus }
+  | { kind: "verdict-log"; entries: VerdictLogEntry[] }
   | { kind: "ok" }
   | { kind: "error"; message: string };
+
+export interface VerdictLogEntry {
+  videoId: string;
+  title: string;
+  channel: string;
+  verdict: "Junk" | "Stay";
+  level: number;
+  customRule: string | null;
+  scoredAt: number;
+}
 
 export function send<R extends Reply = Reply>(msg: Msg): Promise<R> {
   return new Promise((resolve, reject) => {

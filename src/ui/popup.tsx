@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { send } from "../shared/messages";
-import type { TabMsg, TabReply } from "../shared/messages";
+import { sendAs } from "../shared/typed-send";
 import type { LocalAIStatus, ScoredReel, SessionLock, Settings } from "../shared/types";
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -17,26 +16,6 @@ function isShortsUrl(url: string | undefined): boolean {
 function isYouTubeUrl(url: string | undefined): boolean {
   if (!url) return false;
   return /^https:\/\/(www\.|m\.)?youtube\.com\//.test(url);
-}
-
-async function manualSkip(
-  tabId: number,
-): Promise<TabReply | { kind: "send-failed"; reason: string }> {
-  return new Promise((resolve) => {
-    const msg: TabMsg = { kind: "manual-skip" };
-    chrome.tabs.sendMessage(tabId, msg, (reply: TabReply | undefined) => {
-      const err = chrome.runtime.lastError;
-      if (err) {
-        resolve({ kind: "send-failed", reason: err.message ?? "unknown" });
-        return;
-      }
-      if (!reply) {
-        resolve({ kind: "send-failed", reason: "content script returned nothing" });
-        return;
-      }
-      resolve(reply);
-    });
-  });
 }
 
 function fmtAge(ts: number): string {
@@ -63,26 +42,22 @@ function localAIBadge(status: LocalAIStatus | null) {
 
 function Popup() {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
-  const [skipStatus, setSkipStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [verdict, setVerdict] = useState<ScoredReel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lock, setLock] = useState<SessionLock | null>(null);
   const [localAI, setLocalAI] = useState<LocalAIStatus | null>(null);
+  const [logCount, setLogCount] = useState(0);
 
   const refresh = async () => {
     try {
       setTab(await getActiveTab());
-      const s = await send({ kind: "get-settings" });
-      if (s.kind === "settings") setSettings(s.settings);
-      const v = await send({ kind: "get-last-verdict" });
-      if (v.kind === "last-verdict") setVerdict(v.result);
-      const e = await send({ kind: "get-last-error" });
-      if (e.kind === "last-error") setError(e.error);
-      const l = await send({ kind: "get-lock" });
-      if (l.kind === "lock") setLock(l.lock);
-      const ai = await send({ kind: "check-local-ai" });
-      if (ai.kind === "local-ai-status") setLocalAI(ai.status);
+      setSettings((await sendAs({ kind: "get-settings" }, "settings")).settings);
+      setVerdict((await sendAs({ kind: "get-last-verdict" }, "last-verdict")).result);
+      setError((await sendAs({ kind: "get-last-error" }, "last-error")).error);
+      setLock((await sendAs({ kind: "get-lock" }, "lock")).lock);
+      setLocalAI((await sendAs({ kind: "check-local-ai" }, "local-ai-status")).status);
+      setLogCount((await sendAs({ kind: "get-verdict-log" }, "verdict-log")).entries.length);
     } catch {
       // SW idle — silently retry
     }
@@ -102,40 +77,29 @@ function Popup() {
   const usingCustom = settings.useCustomInstruction;
   const aiBadge = localAIBadge(localAI);
 
-  const onSkip = async () => {
-    if (!tab?.id) return;
-    setSkipStatus("…");
-    const reply = await manualSkip(tab.id);
-    if (reply.kind === "skipped") setSkipStatus(`Skipped (${reply.method})`);
-    else if (reply.kind === "skip-failed") setSkipStatus(`Failed: ${reply.reason}`);
-    else setSkipStatus(`No response: ${reply.reason}`);
-    setTimeout(() => setSkipStatus(null), 2000);
-  };
-
   const setLevel = async (level: number) => {
     if (isLocked) return;
     setSettings({ ...settings, currentLevel: level });
-    const reply = await send({ kind: "set-settings", settings: { currentLevel: level } });
-    if (reply.kind === "settings") setSettings(reply.settings);
+    const r = await sendAs({ kind: "set-settings", settings: { currentLevel: level } }, "settings");
+    setSettings(r.settings);
   };
 
   const toggleAuto = async () => {
-    const reply = await send({
-      kind: "set-settings",
-      settings: { autoSkipEnabled: !settings.autoSkipEnabled },
-    });
-    if (reply.kind === "settings") setSettings(reply.settings);
+    const r = await sendAs(
+      { kind: "set-settings", settings: { autoSkipEnabled: !settings.autoSkipEnabled } },
+      "settings",
+    );
+    setSettings(r.settings);
   };
 
   const unlock = async () => {
-    await send({ kind: "unlock-session" });
+    await sendAs({ kind: "unlock-session" }, "ok");
     await refresh();
   };
 
   const downloadModel = async () => {
     setLocalAI({ kind: "downloading" });
-    const r = await send({ kind: "trigger-local-ai-download" });
-    if (r.kind === "local-ai-status") setLocalAI(r.status);
+    setLocalAI((await sendAs({ kind: "trigger-local-ai-download" }, "local-ai-status")).status);
   };
 
   const stageDesc = settings.stages[settings.currentLevel - 1] ?? "";
@@ -170,20 +134,6 @@ function Popup() {
         <div className="error-banner">
           <strong>Last error:</strong> {error}
         </div>
-      )}
-
-      <button
-        className="primary"
-        style={{ width: "100%", padding: "12px", fontSize: 14 }}
-        disabled={!onShorts}
-        onClick={() => void onSkip()}
-      >
-        ⬇ Skip current Short
-      </button>
-      {skipStatus && (
-        <p className="hint" style={{ margin: "6px 0 0", textAlign: "center" }}>
-          {skipStatus}
-        </p>
       )}
 
       {usingCustom ? (
@@ -261,7 +211,10 @@ function Popup() {
         </div>
       )}
 
-      <p style={{ marginTop: 16, marginBottom: 0, textAlign: "center" }}>
+      <p className="hint" style={{ marginTop: 12, marginBottom: 0, textAlign: "center" }}>
+        {logCount} reel{logCount === 1 ? "" : "s"} classified this install
+      </p>
+      <p style={{ marginTop: 8, marginBottom: 0, textAlign: "center" }}>
         <a href="#" onClick={(e) => { e.preventDefault(); void chrome.runtime.openOptionsPage(); }}>
           Edit rules →
         </a>

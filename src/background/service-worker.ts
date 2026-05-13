@@ -1,6 +1,7 @@
 import type { Msg, Reply } from "../shared/messages";
 import type { ScoredReel, SessionLock } from "../shared/types";
 import { loadSettings, saveSettings } from "../shared/settings";
+import { appendLog, clearLog, getLog } from "../shared/verdict-log";
 import { checkLocalAI, fetchMeta, scoreReel, triggerLocalAIDownload } from "./scorer";
 
 const LAST_VERDICT_KEY = "feedfixer.lastVerdict";
@@ -58,6 +59,15 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
   console.log(`[feedfixer] scoring ${videoId}: "${meta.title}" / ${meta.channel} @ level ${settings.currentLevel}`);
   const result = await scoreReel(meta, settings);
   await recordVerdict(result);
+  await appendLog({
+    videoId: meta.videoId,
+    title: meta.title,
+    channel: meta.channel,
+    verdict: result.verdict,
+    level: settings.currentLevel,
+    customRule: settings.useCustomInstruction ? settings.customInstruction : null,
+    scoredAt: result.scoredAt,
+  });
   await ensureLocked(
     settings.currentLevel,
     settings.useCustomInstruction ? settings.customInstruction : null,
@@ -129,6 +139,11 @@ async function handle(msg: Msg): Promise<Reply> {
       return { kind: "local-ai-status", status: await checkLocalAI() };
     case "trigger-local-ai-download":
       return { kind: "local-ai-status", status: await triggerLocalAIDownload() };
+    case "get-verdict-log":
+      return { kind: "verdict-log", entries: await getLog() };
+    case "clear-verdict-log":
+      await clearLog();
+      return { kind: "ok" };
   }
 }
 
