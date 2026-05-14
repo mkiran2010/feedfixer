@@ -46,37 +46,71 @@ export function skipInstagramReel(): string | null {
   return null;
 }
 
-/**
- * Extract caption + author handle from the active Reel's DOM.
- * Instagram doesn't have a public oEmbed, so we scrape what's visible.
- */
-function extractActiveReelMeta(): { title: string; channel: string } | null {
-  // Find the article that contains the currently-playing video.
-  // Heuristic: the only video element actively playing.
+/** Find the <video> closest to the viewport center. That's the active reel. */
+function findActiveVideo(): HTMLVideoElement | null {
   const videos = Array.from(document.querySelectorAll<HTMLVideoElement>("video"));
-  const active = videos.find((v) => !v.paused) ?? videos[0];
-  if (!active) return null;
+  if (videos.length === 0) return null;
+  const viewportCenter = window.innerHeight / 2;
+  let best: HTMLVideoElement | null = null;
+  let bestDistance = Infinity;
+  for (const v of videos) {
+    const rect = v.getBoundingClientRect();
+    if (rect.height === 0 || rect.bottom < 0 || rect.top > window.innerHeight) continue;
+    const center = rect.top + rect.height / 2;
+    const distance = Math.abs(center - viewportCenter);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = v;
+    }
+  }
+  return best;
+}
 
-  const article = active.closest("article") ?? active.closest("section") ?? active.parentElement;
-  if (!article) return null;
+/**
+ * Walk up from the active video looking for the tightest container that
+ * looks like a single reel (not the whole feed, not a sidebar).
+ * Heuristic: container is taller than half the viewport but narrower than 700px.
+ */
+function findReelContainer(video: HTMLVideoElement): HTMLElement | null {
+  let cur: HTMLElement | null = video.parentElement;
+  while (cur && cur !== document.body) {
+    const r = cur.getBoundingClientRect();
+    const tallEnough = r.height > window.innerHeight * 0.5;
+    const notTooWide = r.width < 700;
+    const hasUsernameLink = !!cur.querySelector('a[href^="/"][href$="/"]');
+    if (tallEnough && notTooWide && hasUsernameLink) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
 
-  // Author: first profile link inside the article (href like "/<username>/")
-  const profileLink = article.querySelector<HTMLAnchorElement>('a[href^="/"]');
+/** Extract caption + author from a scoped reel container. */
+function extractActiveReelMeta(): { title: string; channel: string } | null {
+  const video = findActiveVideo();
+  if (!video) return null;
+  const container = findReelContainer(video);
+  if (!container) return null;
+
+  // Author: first profile link inside the scoped container
   let channel = "(unknown)";
+  const profileLink = container.querySelector<HTMLAnchorElement>('a[href^="/"][href$="/"]');
   if (profileLink) {
     const m = profileLink.getAttribute("href")?.match(/^\/([^/]+)\//);
     if (m) channel = `@${m[1]}`;
   }
 
-  // Caption: heuristic — collect visible text nodes inside the article, prefer
-  // longer spans/divs that aren't button labels.
-  const candidates = Array.from(
-    article.querySelectorAll<HTMLElement>("h1, h2, h3, span, div"),
-  )
-    .map((el) => (el.innerText || "").trim())
-    .filter((t) => t.length > 5 && t.length < 500)
-    .filter((t) => !/^(follow|like|comment|share|save|more|remix)$/i.test(t));
-  // Prefer the longest non-numeric string
+  // Caption: prefer elements with dir="auto" (Instagram's marker for user-typed text).
+  // Fall back to spans/h1s within the container. Filter out music attribution and counts.
+  const candidates: string[] = [];
+  for (const el of container.querySelectorAll<HTMLElement>('[dir="auto"], h1, h2, span')) {
+    const text = (el.innerText || "").trim();
+    if (text.length < 5 || text.length > 500) continue;
+    if (/^@\w+$/.test(text)) continue;                     // pure @handle
+    if (/^\d+(\.\d+)?[KkMm]?$/.test(text)) continue;       // counts (29K, 1.2M)
+    if (/·\s*\w/.test(text)) continue;                     // music attribution ("artist · song")
+    if (/^(follow|like|comment|share|save|more|remix|sound|view|reply|translate|see translation)$/i.test(text)) continue;
+    candidates.push(text);
+  }
   candidates.sort((a, b) => b.length - a.length);
   const title = candidates[0] ?? "(no caption)";
 
