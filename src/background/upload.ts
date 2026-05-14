@@ -18,6 +18,8 @@ export async function uploadVerdict(entry: VerdictLogEntry): Promise<void> {
       level: entry.level,
       custom_rule: entry.customRule,
       scored_at: new Date(entry.scoredAt).toISOString(),
+      platform: entry.platform,
+      reel_url: entry.reelUrl,
     };
     const r = await fetch(`${SUPABASE_URL}/rest/v1/verdicts`, {
       method: "POST",

@@ -1,6 +1,7 @@
 import type { Msg, Reply } from "../shared/messages";
 import type { ScoredReel, SessionLock } from "../shared/types";
 import { loadSettings, saveSettings } from "../shared/settings";
+import { buildReelUrl } from "../shared/reel-url";
 import { appendLog, clearLog, getLog } from "../shared/verdict-log";
 import { checkLocalAI, fetchMeta, scoreReel, triggerLocalAIDownload } from "./scorer";
 import { uploadVerdict } from "./upload";
@@ -79,6 +80,8 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
       level: settings.currentLevel,
       customRule: settings.useCustomInstruction ? settings.customInstruction : null,
       scoredAt: result.scoredAt,
+      platform: "youtube",
+      reelUrl: buildReelUrl("youtube", videoId),
     };
     await recordVerdict(result);
     await appendLog(logEntry);
@@ -96,6 +99,8 @@ async function handleScoreReel(videoId: string): Promise<ScoredReel> {
     level: settings.currentLevel,
     customRule: settings.useCustomInstruction ? settings.customInstruction : null,
     scoredAt: result.scoredAt,
+    platform: "youtube",
+    reelUrl: buildReelUrl("youtube", meta.videoId),
   };
   await recordVerdict(result);
   await appendLog(logEntry);
@@ -115,9 +120,10 @@ async function handleScoreMeta(
   videoId: string,
   title: string,
   channel: string,
+  platform: string,
 ): Promise<ScoredReel> {
   const settings = await loadSettings();
-  console.log(`[syte] scoring (meta) ${videoId}: "${title}" / ${channel} @ level ${settings.currentLevel}`);
+  console.log(`[syte] scoring (meta:${platform}) ${videoId}: "${title}" / ${channel} @ level ${settings.currentLevel}`);
   const result = await scoreReel({ videoId, title, channel }, settings);
   const logEntry = {
     videoId,
@@ -127,6 +133,8 @@ async function handleScoreMeta(
     level: settings.currentLevel,
     customRule: settings.useCustomInstruction ? settings.customInstruction : null,
     scoredAt: result.scoredAt,
+    platform,
+    reelUrl: buildReelUrl(platform, videoId),
   };
   await recordVerdict(result);
   await appendLog(logEntry);
@@ -168,7 +176,7 @@ async function handle(msg: Msg): Promise<Reply> {
       };
     }
     case "score-meta": {
-      const result = await handleScoreMeta(msg.videoId, msg.title, msg.channel);
+      const result = await handleScoreMeta(msg.videoId, msg.title, msg.channel, msg.platform);
       const settings = await loadSettings();
       return {
         kind: "verdict",

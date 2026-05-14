@@ -39,6 +39,8 @@ export interface VerdictLogEntry {
   level: number;
   customRule: string | null;
   scoredAt: number;
+  platform: string;
+  reelUrl: string;
 }
 
 export function send<R extends Reply = Reply>(msg: Msg): Promise<R> {
