@@ -9,14 +9,15 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   return tabs[0] ?? null;
 }
 
-function isShortsUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  return /^https:\/\/(www\.|m\.)?youtube\.com\/shorts\//.test(url);
-}
-
-function isYouTubeUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  return /^https:\/\/(www\.|m\.)?youtube\.com\//.test(url);
+function detectPlatformStatus(url: string | undefined): string {
+  if (!url) return "Not on a supported site";
+  if (/^https:\/\/(www\.|m\.)?youtube\.com\/shorts\//.test(url)) return "On YouTube Shorts ✓";
+  if (/^https:\/\/(www\.|m\.)?youtube\.com\//.test(url)) return "On YouTube — open a Short";
+  if (/^https:\/\/www\.instagram\.com\/reels?\//.test(url)) return "On Instagram Reels (skip-only beta)";
+  if (/^https:\/\/www\.instagram\.com\//.test(url)) return "On Instagram — open a Reel";
+  if (/^https:\/\/www\.tiktok\.com\//.test(url)) return "On TikTok (not yet implemented)";
+  if (/^https:\/\/(x|twitter)\.com\//.test(url)) return "On X (not yet implemented)";
+  return "Not on a supported site";
 }
 
 function fmtAge(ts: number): string {
@@ -70,8 +71,6 @@ function Popup() {
 
   if (!settings) return <p>Loading…</p>;
 
-  const onShorts = isShortsUrl(tab?.url);
-  const onYouTube = isYouTubeUrl(tab?.url);
   const isLocked = lock !== null;
   const usingCustom = settings.useCustomInstruction;
   const aiBadge = localAIBadge(localAI);
@@ -110,7 +109,7 @@ function Popup() {
         <h2>Syte</h2>
       </div>
       <p className="hint" style={{ marginTop: 0, marginBottom: 6 }}>
-        {onYouTube ? (onShorts ? "On Shorts" : "On YouTube — open a Short") : "Not on YouTube"}
+        {detectPlatformStatus(tab?.url)}
       </p>
       <p className="hint" style={{ marginTop: 0, marginBottom: 14, color: aiBadge.color, fontWeight: 600 }}>
         {aiBadge.text}
