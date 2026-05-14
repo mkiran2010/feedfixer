@@ -8,6 +8,10 @@
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
+    "https://www.tiktok.com/*",
+    "https://www.instagram.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
     "https://cssxnysrhcydltgajeeo.supabase.co/*"
   ],
   "background": {
@@ -16,7 +20,14 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*", "https://m.youtube.com/*"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://www.tiktok.com/*",
+        "https://www.instagram.com/*",
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle",
       "all_frames": false
